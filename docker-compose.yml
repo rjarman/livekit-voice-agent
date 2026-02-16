@@ -108,6 +108,24 @@ services:
     networks:
       - backend
 
+  livekit-dashboard:
+    image: ghcr.io/thinhdanggroup/livekit-dashboard:latest
+    container_name: livekit-dashboard
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      ADMIN_USERNAME: ${LIVEKIT_DASHBOARD_USERNAME}
+      ADMIN_PASSWORD: ${LIVEKIT_DASHBOARD_PASSWORD}
+      APP_SECRET_KEY: ${LIVEKIT_DASHBOARD_SECRET_KEY}
+    depends_on:
+      - livekit
+    networks:
+      - backend
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
