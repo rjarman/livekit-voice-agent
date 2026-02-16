@@ -43,11 +43,10 @@ services:
     image: livekit/livekit-server:latest
     container_name: livekit
     restart: unless-stopped
-    command: --config /livekit.yaml
-    environment:
-      LIVEKIT_NODE_IP: ${SERVER_IP_ADDRESS}
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+    command: >
+      --config /livekit.yaml
+      --node-ip ${SERVER_IP_ADDRESS}
+      --keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     volumes:
       - ./livekit.yaml:/livekit.yaml
     ports:
