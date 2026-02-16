@@ -152,6 +152,34 @@ livekit-voice-agent/
     └── nginx.conf
 ```
 
+## 🔐 HTTPS & Media Access
+
+Browsers require **HTTPS** (or localhost) to access camera/microphone. If you're using HTTP with an IP address, you'll see:
+
+```
+Error: Accessing media devices is available only in secure contexts
+```
+
+### Solution: Chrome Flags (Development/POC)
+
+1. Open Chrome and go to:
+   ```
+   chrome://flags/#unsafely-treat-insecure-origin-as-secure
+   ```
+
+2. Paste your server URLs (comma-separated):
+   ```
+   http://<server-ip>:3000,http://<server-ip>:7880,http://<server-ip>:3001
+   ```
+
+3. Set to **Enabled**
+
+4. Click **Relaunch**
+
+### Production: Use HTTPS
+
+For production, set up a domain with SSL using [Caddy](https://caddyserver.com/) or a reverse proxy.
+
 ## ⚠️ Firewall Ports
 
 Ensure these ports are open on your server:
