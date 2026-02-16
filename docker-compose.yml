@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: n8n
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_HOST: ${SERVER_IP_ADDRESS}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      NODE_ENV: production
+      WEBHOOK_URL: http://${SERVER_IP_ADDRESS}:5678
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_SECURE_COOKIE: "false"
+    depends_on:
+      - postgres
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - backend
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    restart: unless-stopped
+    command: --config /livekit.yaml
+    environment:
+      LIVEKIT_NODE_IP: ${SERVER_IP_ADDRESS}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+    volumes:
+      - ./livekit.yaml:/livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    networks:
+      - backend
+
+  livekit-token-server:
+    image: node:20-alpine
+    container_name: livekit-token-server
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && node server.js"
+    volumes:
+      - ./livekit-token-server:/app
+    ports:
+      - "3001:3001"
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_URL: ws://livekit:7880
+    networks:
+      - backend
+
+  livekit-agent:
+    build:
+      context: ./livekit-agent
+      dockerfile: Dockerfile
+    container_name: livekit-agent
+    restart: unless-stopped
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      CARTESIA_API_KEY: ${CARTESIA_API_KEY}
+    depends_on:
+      - livekit
+    networks:
+      - backend
+
+  livekit-react-app:
+    build:
+      context: ./livekit-react-app
+      dockerfile: Dockerfile
+      args:
+        VITE_SERVER_IP_ADDRESS: ${SERVER_IP_ADDRESS}
+    container_name: livekit-react-app
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - livekit
+      - livekit-token-server
+    networks:
+      - backend
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  n8n_data:
+  qdrant_data:
