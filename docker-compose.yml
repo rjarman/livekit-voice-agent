@@ -109,7 +109,9 @@ services:
       - backend
 
   livekit-dashboard:
-    image: ghcr.io/thinhdanggroup/livekit-dashboard:latest
+    build:
+      context: https://github.com/thinhdanggroup/livekit-dashboard.git
+      dockerfile: Dockerfile
     container_name: livekit-dashboard
     restart: unless-stopped
     ports:
