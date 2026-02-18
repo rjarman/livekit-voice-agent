@@ -7,7 +7,12 @@ import {
 
 // Detect if we're on HTTPS (domain) or HTTP (IP)
 const isSecure = window.location.protocol === 'https:';
-const SERVER_HOST = import.meta.env.VITE_SERVER_IP_ADDRESS || window.location.hostname;
+
+// When on HTTPS, always use the current hostname (domain)
+// When on HTTP, use env var or fallback to hostname
+const SERVER_HOST = isSecure 
+  ? window.location.hostname 
+  : (import.meta.env.VITE_SERVER_IP_ADDRESS || window.location.hostname);
 
 // Use WSS/HTTPS when on secure connection, WS/HTTP otherwise
 const LIVEKIT_URL = isSecure 

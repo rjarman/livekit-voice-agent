@@ -4,22 +4,6 @@ voice-agent.ddns.net {
         reverse_proxy livekit-token-server:3001
     }
 
-    handle /dashboard/* {
-        uri strip_prefix /dashboard
-        reverse_proxy livekit-dashboard:8000
-    }
-    handle /dashboard {
-        redir /dashboard/ permanent
-    }
-
-    handle /n8n/* {
-        uri strip_prefix /n8n
-        reverse_proxy n8n:5678
-    }
-    handle /n8n {
-        redir /n8n/ permanent
-    }
-
     handle {
         reverse_proxy livekit-react-app:80
     }
