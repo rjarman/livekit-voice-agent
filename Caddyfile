@@ -1,0 +1,14 @@
+voice-agent.ddns.net {
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy livekit-token-server:3001
+    }
+
+    handle {
+        reverse_proxy livekit-react-app:80
+    }
+}
+
+voice-agent.ddns.net:7880 {
+    reverse_proxy livekit:7880
+}

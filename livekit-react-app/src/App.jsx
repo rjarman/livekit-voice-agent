@@ -5,9 +5,19 @@ import {
   RoomAudioRenderer,
 } from '@livekit/components-react';
 
-const SERVER_IP = import.meta.env.VITE_SERVER_IP_ADDRESS || window.location.hostname;
-const LIVEKIT_URL = `ws://${SERVER_IP}:7880`;
-const TOKEN_SERVER_URL = `http://${SERVER_IP}:3001`;
+// Detect if we're on HTTPS (domain) or HTTP (IP)
+const isSecure = window.location.protocol === 'https:';
+const SERVER_HOST = import.meta.env.VITE_SERVER_IP_ADDRESS || window.location.hostname;
+
+// Use WSS/HTTPS when on secure connection, WS/HTTP otherwise
+const LIVEKIT_URL = isSecure 
+  ? `wss://${SERVER_HOST}:7880`
+  : `ws://${SERVER_HOST}:7880`;
+
+// Token server: use /api path when on domain (proxied by Caddy), direct port when on IP
+const TOKEN_SERVER_URL = isSecure
+  ? `${window.location.origin}/api`
+  : `http://${SERVER_HOST}:3001`;
 
 function App() {
   const [token, setToken] = useState('');

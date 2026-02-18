@@ -127,6 +127,24 @@ services:
     networks:
       - backend
 
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - livekit
+      - livekit-react-app
+      - livekit-token-server
+    networks:
+      - backend
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
@@ -149,3 +167,5 @@ volumes:
   postgres_data:
   n8n_data:
   qdrant_data:
+  caddy_data:
+  caddy_config:
