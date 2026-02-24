@@ -1,4 +1,11 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    networks:
+      - backend
+
   postgres:
     image: postgres:16
     container_name: postgres
@@ -53,6 +60,8 @@ services:
       - "7880:7880"
       - "7881:7881"
       - "7882:7882/udp"
+    depends_on:
+      - redis
     networks:
       - backend
 
