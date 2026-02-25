@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from dotenv import load_dotenv
 
@@ -36,8 +37,11 @@ async def entrypoint(ctx: JobContext):
     room_name = ctx.room.name
     logger.info(f"Agent connecting to room: {room_name}")
 
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    logger.info(f"Agent connected to room: {room_name}")
+    await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
+
+    logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
+    participant = await ctx.wait_for_participant()
+    logger.info(f"Participant joined: {participant.identity} (kind: {participant.kind})")
 
     session = AgentSession(
         stt=assemblyai.STT(),
@@ -53,7 +57,13 @@ async def entrypoint(ctx: JobContext):
 
     logger.info(f"Agent session started in room: {room_name}")
     await session.say("Hello! How can I help you today?")
-    logger.info("Greeting sent")
+    logger.info("Greeting sent, session running...")
+
+    # Keep the session alive until the room closes
+    disconnect_event = asyncio.Event()
+    ctx.add_shutdown_callback(lambda: disconnect_event.set())
+    await disconnect_event.wait()
+    logger.info(f"Agent leaving room: {room_name}")
 
 
 if __name__ == "__main__":
@@ -61,6 +71,5 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
-            agent_name="voice-agent",
         ),
     )
