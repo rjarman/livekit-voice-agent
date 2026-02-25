@@ -2,6 +2,7 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -40,7 +41,15 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
 
     logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
-    participant = await ctx.wait_for_participant()
+
+    # Wait for any non-agent participant
+    # This works for BOTH browser and SIP participants
+    participant = await ctx.wait_for_participant(kind=rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD)
+
+    # If no standard participant, try SIP
+    if participant is None:
+        participant = await ctx.wait_for_participant(kind=rtc.ParticipantKind.PARTICIPANT_KIND_SIP)
+
     logger.info(f"Participant joined: {participant.identity} (kind: {participant.kind})")
 
     session = AgentSession(
@@ -59,7 +68,6 @@ async def entrypoint(ctx: JobContext):
     await session.say("Hello! How can I help you today?")
     logger.info("Greeting sent, session running...")
 
-    # Keep the session alive until the room closes
     disconnect_event = asyncio.Event()
     ctx.add_shutdown_callback(lambda: disconnect_event.set())
     await disconnect_event.wait()
