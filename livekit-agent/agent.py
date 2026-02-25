@@ -9,6 +9,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     AutoSubscribe,
+    RoomInputOptions,
 )
 from livekit.plugins import assemblyai, groq, cartesia, silero
 
@@ -52,7 +53,7 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(),
         room=ctx.room,
-        participant=participant,  # <-- THIS WAS MISSING
+        room_input=RoomInputOptions(participant=participant),
     )
 
     logger.info(f"Agent session started in room: {room_name}")
@@ -65,6 +66,6 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
-            agent_name="voice-agent",  # Register with a name for dispatch
+            agent_name="voice-agent",
         ),
     )
