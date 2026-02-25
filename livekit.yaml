@@ -9,10 +9,6 @@ rtc:
   use_external_ip: true
   port_range_start: 50000
   port_range_end: 50100
-  interfaces:
-    includes:
-      - eth0
-      - lo
 
 room:
   empty_timeout: 300
