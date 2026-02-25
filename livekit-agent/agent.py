@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from dotenv import load_dotenv
 
@@ -30,52 +29,33 @@ class Assistant(Agent):
 
 
 def prewarm(proc: JobProcess):
-    """Preload VAD model for faster startup"""
     proc.userdata["vad"] = silero.VAD.load()
 
 
 async def entrypoint(ctx: JobContext):
-    """Main entry point - agent joins every room automatically"""
     room_name = ctx.room.name
     logger.info(f"Agent connecting to room: {room_name}")
-    
-    # Connect to the room
+
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    
     logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
-    
-    # Wait for a participant to join (don't start until someone is there)
+
     participant = await ctx.wait_for_participant()
     logger.info(f"Participant joined: {participant.identity}, starting agent session")
-    
-    try:
-        session = AgentSession(
-            stt=assemblyai.STT(),
-            llm=groq.LLM(model="llama-3.1-8b-instant"),
-            tts=cartesia.TTS(),
-            vad=ctx.proc.userdata["vad"],
-        )
 
-        await session.start(
-            agent=Assistant(),
-            room=ctx.room,
-        )
-        
-        logger.info(f"Agent session started in room: {room_name}")
-        
-        # Say hello to the participant
-        await session.say("Hello! How can I help you today?")
-        logger.info("Greeting sent")
-        
-    except Exception as e:
-        logger.error(f"Error starting session: {e}")
-        raise
-    
-    # Keep running until disconnected
-    while ctx.room.connection_state.name == "CONN_CONNECTED":
-        await asyncio.sleep(1)
-    
-    logger.info(f"Agent leaving room: {room_name}")
+    session = AgentSession(
+        stt=assemblyai.STT(),
+        llm=groq.LLM(model="llama-3.1-8b-instant"),
+        tts=cartesia.TTS(),
+        vad=ctx.proc.userdata["vad"],
+    )
+
+    await session.start(
+        agent=Assistant(),
+        room=ctx.room,
+    )
+
+    logger.info(f"Agent session started in room: {room_name}")
+    await session.say("Hello! How can I help you today?")
 
 
 if __name__ == "__main__":
@@ -83,5 +63,6 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
+            agent_name="voice-agent",  # Register with a name for dispatch
         ),
     )
