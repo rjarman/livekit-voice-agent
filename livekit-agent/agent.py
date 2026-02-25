@@ -40,7 +40,6 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
     logger.info(f"Agent connected to room: {room_name}")
 
-    # Don't filter by kind — works for BOTH browser and SIP participants
     session = AgentSession(
         stt=assemblyai.STT(),
         llm=groq.LLM(model="llama-3.1-8b-instant"),
@@ -57,8 +56,13 @@ async def entrypoint(ctx: JobContext):
     await session.say("Hello! How can I help you today?")
     logger.info("Greeting sent, session running...")
 
+    # Keep alive — use an async callback to avoid the TypeError
     disconnect_event = asyncio.Event()
-    ctx.add_shutdown_callback(lambda: disconnect_event.set())
+
+    async def on_shutdown():
+        disconnect_event.set()
+
+    ctx.add_shutdown_callback(on_shutdown)
     await disconnect_event.wait()
     logger.info(f"Agent leaving room: {room_name}")
 
