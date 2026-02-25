@@ -8,9 +8,9 @@ from livekit.agents import (
     JobProcess,
     WorkerOptions,
     cli,
+    AutoSubscribe,
 )
 from livekit.plugins import assemblyai, groq, cartesia, silero
-from livekit.agents.job import AutoSubscribe
 
 load_dotenv()
 
@@ -38,8 +38,10 @@ async def entrypoint(ctx: JobContext):
     room_name = ctx.room.name
     logger.info(f"Agent connecting to room: {room_name}")
     
-    # Connect to the room with auto-subscribe
+    # Connect to the room
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    
+    logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
     
     # Wait for a participant to join (don't start until someone is there)
     participant = await ctx.wait_for_participant()
