@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from dotenv import load_dotenv
 
@@ -47,19 +48,34 @@ async def entrypoint(ctx: JobContext):
     participant = await ctx.wait_for_participant()
     logger.info(f"Participant joined: {participant.identity}, starting agent session")
     
-    session = AgentSession(
-        stt=assemblyai.STT(),
-        llm=groq.LLM(model="llama-3.1-8b-instant"),
-        tts=cartesia.TTS(),
-        vad=ctx.proc.userdata["vad"],
-    )
+    try:
+        session = AgentSession(
+            stt=assemblyai.STT(),
+            llm=groq.LLM(model="llama-3.1-8b-instant"),
+            tts=cartesia.TTS(),
+            vad=ctx.proc.userdata["vad"],
+        )
 
-    await session.start(
-        agent=Assistant(),
-        room=ctx.room,
-    )
+        await session.start(
+            agent=Assistant(),
+            room=ctx.room,
+        )
+        
+        logger.info(f"Agent session started in room: {room_name}")
+        
+        # Say hello to the participant
+        await session.say("Hello! How can I help you today?")
+        logger.info("Greeting sent")
+        
+    except Exception as e:
+        logger.error(f"Error starting session: {e}")
+        raise
     
-    logger.info(f"Agent session active in room: {room_name}")
+    # Keep running until disconnected
+    while ctx.room.connection_state.name == "CONN_CONNECTED":
+        await asyncio.sleep(1)
+    
+    logger.info(f"Agent leaving room: {room_name}")
 
 
 if __name__ == "__main__":
@@ -67,5 +83,6 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm,
+            agent_name="voice-assistant",
         ),
     )
