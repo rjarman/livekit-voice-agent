@@ -61,7 +61,7 @@ app.post('/token', async (req, res) => {
       dispatchedRooms.set(roomName, 'pending');
       
       try {
-        const dispatch = await agentDispatch.createDispatch(roomName);
+        const dispatch = await agentDispatch.createDispatch(roomName, 'voice-agent');
         dispatchedRooms.set(roomName, dispatch?.dispatchId || 'dispatched');
         console.log(`Agent dispatched to room: ${roomName}`);
         
