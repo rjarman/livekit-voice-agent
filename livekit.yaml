@@ -17,3 +17,6 @@ room:
 logging:
   level: info
   json: false
+
+sip:
+  enabled: true

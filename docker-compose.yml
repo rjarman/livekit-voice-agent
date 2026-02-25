@@ -119,6 +119,27 @@ services:
     networks:
       - backend
 
+  livekit-sip:
+    image: livekit/sip:latest
+    container_name: livekit-sip
+    restart: unless-stopped
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY}
+        api_secret: ${LIVEKIT_API_SECRET}
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+    depends_on:
+      - livekit
+      - redis
+    networks:
+      - backend
+
   livekit-react-app:
     build:
       context: ./livekit-react-app
@@ -150,6 +171,9 @@ services:
       ADMIN_USERNAME: ${LIVEKIT_DASHBOARD_USERNAME}
       ADMIN_PASSWORD: ${LIVEKIT_DASHBOARD_PASSWORD}
       APP_SECRET_KEY: ${LIVEKIT_DASHBOARD_SECRET_KEY}
+      SIP_ENABLED: "true"
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
     depends_on:
       - livekit
     networks:
