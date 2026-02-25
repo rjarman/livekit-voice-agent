@@ -9,7 +9,6 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     AutoSubscribe,
-    RoomInputOptions,
 )
 from livekit.plugins import assemblyai, groq, cartesia, silero
 
@@ -38,10 +37,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Agent connecting to room: {room_name}")
 
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
-
-    participant = await ctx.wait_for_participant()
-    logger.info(f"Participant joined: {participant.identity}, starting agent session")
+    logger.info(f"Agent connected to room: {room_name}")
 
     session = AgentSession(
         stt=assemblyai.STT(),
@@ -53,7 +49,6 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(),
         room=ctx.room,
-        room_input=RoomInputOptions(participant=participant),
     )
 
     logger.info(f"Agent session started in room: {room_name}")
