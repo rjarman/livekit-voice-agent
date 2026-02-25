@@ -134,6 +134,7 @@ services:
         redis:
           address: localhost:6379
         sip_port: 5060
+        sip_external_ip: ${SERVER_IP_ADDRESS}
         rtp_port: 10000-20000
     depends_on:
       - livekit
