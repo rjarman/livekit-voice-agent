@@ -88,8 +88,9 @@ services:
       dockerfile: Dockerfile
     container_name: livekit-agent
     restart: unless-stopped
+    network_mode: "host"
     environment:
-      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_URL: ws://localhost:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
@@ -97,8 +98,6 @@ services:
       CARTESIA_API_KEY: ${CARTESIA_API_KEY}
     depends_on:
       - livekit
-    networks:
-      - backend
 
   livekit-egress:
     image: livekit/egress:latest
