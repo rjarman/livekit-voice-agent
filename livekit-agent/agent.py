@@ -57,7 +57,6 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(),
         room=ctx.room,
-        participant=participant,
     )
     
     logger.info(f"Agent session active in room: {room_name}")
