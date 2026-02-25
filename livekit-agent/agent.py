@@ -52,10 +52,12 @@ async def entrypoint(ctx: JobContext):
     await session.start(
         agent=Assistant(),
         room=ctx.room,
+        participant=participant,  # <-- THIS WAS MISSING
     )
 
     logger.info(f"Agent session started in room: {room_name}")
     await session.say("Hello! How can I help you today?")
+    logger.info("Greeting sent")
 
 
 if __name__ == "__main__":
