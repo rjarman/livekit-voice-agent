@@ -2,7 +2,6 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 
-from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -39,19 +38,9 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Agent connecting to room: {room_name}")
 
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
+    logger.info(f"Agent connected to room: {room_name}")
 
-    logger.info(f"Agent connected to room: {room_name}, waiting for participant...")
-
-    # Wait for any non-agent participant
-    # This works for BOTH browser and SIP participants
-    participant = await ctx.wait_for_participant(kind=rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD)
-
-    # If no standard participant, try SIP
-    if participant is None:
-        participant = await ctx.wait_for_participant(kind=rtc.ParticipantKind.PARTICIPANT_KIND_SIP)
-
-    logger.info(f"Participant joined: {participant.identity} (kind: {participant.kind})")
-
+    # Don't filter by kind — works for BOTH browser and SIP participants
     session = AgentSession(
         stt=assemblyai.STT(),
         llm=groq.LLM(model="llama-3.1-8b-instant"),
