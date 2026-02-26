@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { AccessToken, RoomServiceClient, AgentDispatchClient } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient, AgentDispatchClient, SipClient } = require('livekit-server-sdk');
 
 const app = express();
 app.use(cors());
@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3001;
 
 const roomService = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 const agentDispatch = new AgentDispatchClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+const sipClient = new SipClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
 // Track rooms with dispatched agents (prevent duplicates)
 const dispatchedRooms = new Map(); // roomName -> dispatchId
@@ -109,6 +110,44 @@ app.get('/token', async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
+
+app.post('/sip/call', async (req, res) => {
+  try {
+    const { roomName, phoneNumber, sipTrunkId } = req.body;
+
+    if (!roomName || !phoneNumber || !sipTrunkId) {
+      return res.status(400).json({
+        error: 'roomName, phoneNumber, and sipTrunkId are required',
+      });
+    }
+
+    await roomService.createRoom({ name: roomName }).catch(() => {});
+
+    const participant = await sipClient.createSipParticipant({
+      sipTrunkId,
+      sipCallTo: phoneNumber,
+      roomName,
+      participantIdentity: `phone-${phoneNumber}`,
+      participantName: `Phone ${phoneNumber}`,
+    });
+
+    console.log(`Outbound call to ${phoneNumber} in room ${roomName}`);
+    res.json({ success: true, participant });
+  } catch (error) {
+    console.error('SIP call error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/sip/trunks', async (req, res) => {
+  try {
+    const trunks = await sipClient.listSipOutboundTrunk();
+    res.json({ trunks });
+  } catch (error) {
+    console.error('Error listing trunks:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
