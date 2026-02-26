@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { AccessToken, RoomServiceClient, AgentDispatchClient, SipClient } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient, AgentDispatchClient, SipClient, SIPParticipantInfo } = require('livekit-server-sdk');
 
 const app = express();
 app.use(cors());
@@ -125,13 +125,15 @@ app.post('/sip/call', async (req, res) => {
 
     await roomService.createRoom({ name: roomName }).catch(() => {});
 
-    const participant = await sipClient.createSipParticipant({
+    const participant = await sipClient.createSipParticipant(
       sipTrunkId,
-      sipCallTo: phoneNumber,
+      phoneNumber,
       roomName,
-      participantIdentity: `phone-${phoneNumber}`,
-      participantName: `Phone ${phoneNumber}`,
-    });
+      {
+        participantIdentity: `phone-${phoneNumber}`,
+        participantName: `Phone ${phoneNumber}`,
+      }
+    );
 
     console.log(`Outbound call to ${phoneNumber} in room ${roomName}`);
     res.json({ success: true, participant });
