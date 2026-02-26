@@ -125,6 +125,15 @@ app.post('/sip/call', async (req, res) => {
 
     await roomService.createRoom({ name: roomName }).catch(() => {});
 
+    try {
+      await agentDispatch.createDispatch(roomName, '');
+      console.log(`Agent dispatched to room: ${roomName}`);
+    } catch (e) {
+      console.log(`Agent dispatch note: ${e.message}`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const participant = await sipClient.createSipParticipant(
       sipTrunkId,
       phoneNumber,
@@ -132,6 +141,7 @@ app.post('/sip/call', async (req, res) => {
       {
         participantIdentity: `phone-${phoneNumber}`,
         participantName: `Phone ${phoneNumber}`,
+        playDialtone: true,
       }
     );
 
