@@ -126,7 +126,7 @@ app.post('/sip/call', async (req, res) => {
     await roomService.createRoom({ name: roomName }).catch(() => {});
 
     try {
-      await agentDispatch.createDispatch(roomName, '');
+      await agentDispatch.createDispatch(roomName, 'voice-agent');
       console.log(`Agent dispatched to room: ${roomName}`);
     } catch (e) {
       console.log(`Agent dispatch note: ${e.message}`);
