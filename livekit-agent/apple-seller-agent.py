@@ -83,7 +83,9 @@ async def _fetch_prices_from_webhook() -> list[dict[str, Any]]:
         return []
 
 
-async def _trigger_n8n_purchase(product_id: str, product_name: str, quantity: int) -> dict[str, Any]:
+async def _trigger_n8n_purchase(
+    product_id: str, product_name: str, quantity: int, user_name: str = ""
+) -> dict[str, Any]:
     """POST to n8n purchase webhook."""
     if not N8N_PURCHASE_WEBHOOK_URL:
         return {"success": False, "error": "Purchase webhook not configured. Set N8N_PURCHASE_WEBHOOK_URL."}
@@ -91,6 +93,7 @@ async def _trigger_n8n_purchase(product_id: str, product_name: str, quantity: in
         "product_id": product_id,
         "product_name": product_name,
         "quantity": quantity,
+        "user_name": (user_name or "").strip(),
     }
     try:
         async with aiohttp.ClientSession() as session:
@@ -122,7 +125,7 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
 - Be concise and clear. No emojis, asterisks, or complex formatting in your speech.
 - When the user describes what they need (e.g. "a phone", "laptop for work", "headphones for running"), use get_apple_prices to show relevant products and prices. You can filter by category or search_term.
 - When the user asks for prices or "what do you have", call get_apple_prices and summarize the options.
-- When the user says they want to buy something (e.g. "I'll take the iPhone 16", "buy two AirPods Pro"), use trigger_purchase with the product_id and quantity. Confirm the order after.
+- When the user says they want to buy something (e.g. "I'll take the iPhone 16", "buy two AirPods Pro"), ask for their name for the order if you don't have it yet, then use trigger_purchase with product_id, quantity, and user_name. Confirm the order after.
 - If the user is unsure, suggest a few options and offer to get latest prices or place an order.
 - Always use the tools to get real prices and to trigger purchases; do not make up prices or order IDs."""
         )
@@ -198,11 +201,13 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
         context: RunContext,
         product_id: str,
         quantity: int = 1,
+        user_name: str = "",
     ) -> dict[str, Any]:
-        """Trigger the n8n purchase workflow so the user can complete the order. Call this when the user confirms they want to buy a product.
+        """Trigger the n8n purchase workflow so the user can complete the order. Call this when the user confirms they want to buy and has given their name for the order.
         Args:
             product_id: The product id from get_apple_prices (e.g. iphone-16, airpods-pro-2).
             quantity: Number of units to order (default 1).
+            user_name: The name of the customer placing the order (ask for it before calling if not yet provided).
         """
         name = next((p["name"] for p in APPLE_PRODUCT_CATALOG if p.get("id") == product_id), product_id)
 
@@ -215,7 +220,7 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
         if N8N_PURCHASE_WEBHOOK_URL:
             status_task = asyncio.create_task(_speak_processing_order())
             try:
-                result = await _trigger_n8n_purchase(product_id, name, quantity)
+                result = await _trigger_n8n_purchase(product_id, name, quantity, user_name)
             finally:
                 status_task.cancel()
                 try:
@@ -223,7 +228,7 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
                 except asyncio.CancelledError:
                     pass
             return result
-        result = await _trigger_n8n_purchase(product_id, name, quantity)
+        result = await _trigger_n8n_purchase(product_id, name, quantity, user_name)
         return result
 
 
