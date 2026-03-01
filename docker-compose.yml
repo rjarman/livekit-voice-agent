@@ -88,8 +88,10 @@ services:
     build:
       context: ./livekit-agent
       dockerfile: Dockerfile
+    image: livekit-agent:latest
     container_name: livekit-agent
     restart: unless-stopped
+    command: ["uv", "run", "python", "voice-agent.py", "start"]
     environment:
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
@@ -97,6 +99,28 @@ services:
       ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY}
       CARTESIA_API_KEY: ${CARTESIA_API_KEY}
+    depends_on:
+      - livekit
+    networks:
+      - backend
+
+  livekit-apple-seller-agent:
+    build:
+      context: ./livekit-agent
+      dockerfile: Dockerfile
+    image: livekit-agent:latest
+    container_name: livekit-apple-seller-agent
+    restart: unless-stopped
+    command: ["uv", "run", "python", "apple-seller-agent.py", "start"]
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      CARTESIA_API_KEY: ${CARTESIA_API_KEY}
+      N8N_PURCHASE_WEBHOOK_URL: ${N8N_PURCHASE_WEBHOOK_URL:-}
+      N8N_PRICES_WEBHOOK_URL: ${N8N_PRICES_WEBHOOK_URL:-}
     depends_on:
       - livekit
     networks:

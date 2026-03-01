@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "LiveKit Voice Agent"
 requires-python = ">=3.11"
 dependencies = [
+    "aiohttp>=3.9.0",
     "livekit-agents>=1.0.0",
     "livekit-plugins-silero>=0.7.0",
     "livekit-plugins-assemblyai>=0.2.0",

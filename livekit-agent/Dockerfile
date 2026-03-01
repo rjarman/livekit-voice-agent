@@ -14,7 +14,8 @@ ENV PATH="/root/.local/bin:$PATH"
 
 # Copy project files
 COPY pyproject.toml .
-COPY agent.py .
+COPY voice-agent.py .
+COPY apple-seller-agent.py .
 
 # Install dependencies with uv
 RUN uv sync --no-dev
@@ -22,5 +23,5 @@ RUN uv sync --no-dev
 # Download Silero VAD model during build
 RUN uv run python -c "from livekit.plugins import silero; silero.VAD.load()"
 
-# Run the agent
-CMD ["uv", "run", "python", "agent.py", "start"]
+# Default: run voice agent (override in docker-compose for apple-seller-agent)
+CMD ["uv", "run", "python", "voice-agent.py", "start"]
