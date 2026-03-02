@@ -68,6 +68,33 @@ APPLE_PRODUCT_CATALOG: list[dict[str, Any]] = [
 ]
 
 
+def _normalize_products_response(raw: list[Any]) -> list[dict[str, Any]]:
+    """Flatten n8n response: handle nested structure like [{ data: { data: { products: [...] } } }]."""
+    if not raw or not isinstance(raw, list):
+        return []
+    # Single wrapper object with nested data.data.products (common n8n Firecrawl shape)
+    if len(raw) == 1 and isinstance(raw[0], dict):
+        inner = raw[0]
+        if isinstance(inner.get("data"), dict) and isinstance(inner["data"].get("data"), dict):
+            nested = inner["data"]["data"].get("products")
+            if isinstance(nested, list) and nested:
+                return [p for p in nested if isinstance(p, dict)]
+    # Already a list of product objects (have id/name/price_usd)
+    if all(isinstance(p, dict) and (p.get("id") is not None or p.get("name")) for p in raw):
+        return list(raw)
+    # Multiple wrappers: collect all data.data.products
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        data = item.get("data")
+        if isinstance(data, dict) and isinstance(data.get("data"), dict):
+            for p in data["data"].get("products") or []:
+                if isinstance(p, dict):
+                    out.append(p)
+    return out if out else list(raw)
+
+
 async def _fetch_prices_from_webhook() -> list[dict[str, Any]]:
     """Fetch latest prices from n8n webhook if configured."""
     if not N8N_PRICES_WEBHOOK_URL:
@@ -80,9 +107,9 @@ async def _fetch_prices_from_webhook() -> list[dict[str, Any]]:
                     return []
                 data = await resp.json()
                 if isinstance(data, list):
-                    return data
+                    return _normalize_products_response(data)
                 if isinstance(data, dict) and "products" in data:
-                    return data["products"]
+                    return _normalize_products_response(data["products"])
                 return []
     except Exception as e:
         logger.warning("Failed to fetch prices from webhook: %s", e)
@@ -249,10 +276,22 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
         if not user_name or not user_name.strip():
             return "Could not place the order — the customer's name is required. Please ask for their name first."
 
+        # Resolve display name from catalog or from latest webhook products (e.g. iPhone 17)
         product_name = next(
             (p["name"] for p in APPLE_PRODUCT_CATALOG if p.get("id") == product_id),
-            product_id,
+            None,
         )
+        if product_name is None and N8N_PRICES_WEBHOOK_URL:
+            try:
+                webhook_products = await _fetch_prices_from_webhook()
+                product_name = next(
+                    (p.get("name") or product_id for p in webhook_products if (p.get("id") or "").lower() == product_id.strip().lower()),
+                    product_id,
+                )
+            except Exception:
+                product_name = product_id
+        if product_name is None:
+            product_name = product_id
 
         async def _speak_processing_order() -> None:
             await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
