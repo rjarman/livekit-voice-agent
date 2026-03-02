@@ -117,16 +117,26 @@ async def _trigger_n8n_purchase(
 class AppleSellerAgent(Agent):
     """Voice agent that sells Apple products and can trigger n8n purchase workflow."""
 
-    def __init__(self) -> None:
+    # Delay after goodbye before actually disconnecting, so TTS finishes speaking
+    END_CALL_DELAY = 2.0
+
+    def __init__(self, disconnect_event: asyncio.Event) -> None:
+        self._disconnect_event = disconnect_event
         super().__init__(
-            instructions="""You are a friendly Apple product seller in a voice call. The user is talking to you via voice.
+            instructions="""\
+You are a friendly Apple product seller in a voice call. The user is talking to you via voice.
 Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPods, Apple Watch, etc.) and complete a purchase if they want.
 
-- Be concise and clear. No emojis, asterisks, or complex formatting in your speech.
-- CRITICAL: Never say, speak, or output any internal function or tool name (e.g. get_apple_prices, trigger_purchase, or any other technical name). Only speak natural sentences to the user. When you need to fetch prices or place an order, call the tool silently and then say the result in plain language (e.g. "Here are our iPhones..." or "Your order is confirmed").
-- When the user asks for prices or "what do you have", call the price lookup tool (with category or search_term if relevant) and then summarize the results in a short, natural reply. Do not announce that you are calling a function.
-- When the user wants to buy something, ask for their name if needed, then call the purchase tool and confirm in natural language. Do not say any tool name.
-- If the user is unsure, suggest a few options. Always use the tools for real prices and orders; do not make up prices or order IDs."""
+ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
+1. You MUST speak ONLY natural, conversational sentences. You are talking to a real person on a phone call.
+2. NEVER say any word that looks like a function name, variable name, parameter name, or code. Examples of FORBIDDEN words: "get_apple_prices", "trigger_purchase", "product_id", "price_usd", "search_term", "category", "user_name", "quantity". If you catch yourself about to say any underscore-containing word or any technical term, STOP and rephrase as a normal human sentence.
+3. NEVER narrate or describe what you are doing internally. Do NOT say things like "Let me call...", "I'm going to use...", "Fetching with category...", "Looking up with search term...", or "I'll trigger the...". Just DO it silently, then speak the result naturally.
+4. NEVER read out JSON keys, field names, or argument values. When you receive product data, translate it to natural speech: say "seven ninety-nine dollars" not "price_usd 799", say "the iPhone 16" not "product_id iphone-16".
+5. Keep your replies short and voice-friendly. List at most 3-4 products at a time. If there are more, offer to tell them about the rest.
+6. When the user wants to buy, ask for their name first if you don't have it, confirm the product and quantity, then place the order and tell them the result.
+7. If the user is unsure, suggest 2-3 options based on their needs. Do not make up prices — always use the tools to get real data.
+8. Do not use emojis, asterisks, bullet points, or any visual formatting. Speak in plain sentences.
+9. ENDING THE CALL: After a successful purchase, say a brief thank-you and goodbye, then end the call. If the customer says they are not interested, not looking to buy, or wants to end the conversation, say a polite goodbye and end the call. Always say goodbye BEFORE ending the call so the customer hears it."""
         )
 
     @function_tool()
@@ -135,20 +145,20 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
         context: RunContext,
         category: str = "",
         search_term: str = "",
-    ) -> dict[str, Any]:
-        """Get latest Apple product prices. Use when the user asks for prices, what products are available, or what you sell.
+    ) -> str:
+        """Look up Apple product prices. Use when the customer asks about prices, products, or what is available.
         Args:
-            category: Filter by category: iPhone, iPad, Mac, Accessories, Watch. Leave empty for all.
-            search_term: Optional search in product names (e.g. 'pro', 'air', 'macbook').
+            category: Filter by product type: iPhone, iPad, Mac, Accessories, Watch. Leave empty to show all.
+            search_term: Optional keyword to narrow results (e.g. 'pro', 'air', 'macbook').
+        Returns:
+            A plain-English summary of matching products. Read it back to the customer naturally — never read out field names or IDs.
         """
-        # If we will call the external API, say "one moment" after a short delay so user doesn't hear silence
         async def _speak_fetching_prices() -> None:
             await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
             await context.session.generate_reply(
                 instructions="Say one very short sentence: you are checking the latest prices, one moment. No lists or details."
             )
 
-        fetch_task: asyncio.Task[list[dict[str, Any]]] | None = None
         if N8N_PRICES_WEBHOOK_URL:
             status_task = asyncio.create_task(_speak_fetching_prices())
             fetch_task = asyncio.create_task(_fetch_prices_from_webhook())
@@ -178,21 +188,27 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
             ]
 
         if not products:
-            return {"products": [], "message": "No products match. Try another category or search."}
+            return "No matching products found. Ask the customer if they'd like to try a different category or search."
 
-        return {
-            "products": [
-                {
-                    "id": p.get("id"),
-                    "name": p.get("name"),
-                    "category": p.get("category"),
-                    "price_usd": p.get("price_usd"),
-                    "description": p.get("description"),
-                }
-                for p in products
-            ],
-            "message": f"Found {len(products)} product(s).",
-        }
+        # Build a human-readable summary so the LLM doesn't read out raw field names
+        lines = []
+        for p in products:
+            name = p.get("name", "Unknown")
+            price = p.get("price_usd")
+            desc = p.get("description", "")
+            price_str = f"${price:,}" if price else "price unavailable"
+            line = f"{name}: {price_str}"
+            if desc:
+                line += f" ({desc})"
+            # Attach the internal ID so the LLM can call the purchase tool, but label it clearly
+            line += f" [order code: {p.get('id', '')}]"
+            lines.append(line)
+
+        return (
+            f"{len(products)} product(s) available:\n"
+            + "\n".join(lines)
+            + "\n\nTell the customer about these products in natural speech. Never read out the order codes — those are only for placing orders internally."
+        )
 
     @function_tool()
     async def trigger_purchase(
@@ -201,14 +217,29 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
         product_id: str,
         quantity: int = 1,
         user_name: str = "",
-    ) -> dict[str, Any]:
-        """Trigger the n8n purchase workflow so the user can complete the order. Call this when the user confirms they want to buy and has given their name for the order.
+    ) -> str:
+        """Place a purchase order for the customer. Only call this AFTER the customer has confirmed they want to buy and has provided their name.
         Args:
-            product_id: The product id from get_apple_prices (e.g. iphone-16, airpods-pro-2).
-            quantity: Number of units to order (default 1).
-            user_name: The name of the customer placing the order (ask for it before calling if not yet provided).
+            product_id: The order code for the product (e.g. iphone-16, airpods-pro-2).
+            quantity: How many units to order (default 1).
+            user_name: The customer's name (you must ask for it before calling this).
+        Returns:
+            A plain-English result. Relay it to the customer naturally — never read out technical details.
         """
-        name = next((p["name"] for p in APPLE_PRODUCT_CATALOG if p.get("id") == product_id), product_id)
+        # Validate inputs
+        if not product_id or not product_id.strip():
+            return "Could not place the order — no product was specified. Ask the customer which product they want."
+
+        if quantity < 1:
+            return "Could not place the order — the quantity must be at least 1."
+
+        if not user_name or not user_name.strip():
+            return "Could not place the order — the customer's name is required. Please ask for their name first."
+
+        product_name = next(
+            (p["name"] for p in APPLE_PRODUCT_CATALOG if p.get("id") == product_id),
+            product_id,
+        )
 
         async def _speak_processing_order() -> None:
             await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
@@ -219,16 +250,48 @@ Your job is to help them find the right Apple product (iPhone, iPad, Mac, AirPod
         if N8N_PURCHASE_WEBHOOK_URL:
             status_task = asyncio.create_task(_speak_processing_order())
             try:
-                result = await _trigger_n8n_purchase(product_id, name, quantity, user_name)
+                result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
             finally:
                 status_task.cancel()
                 try:
                     await status_task
                 except asyncio.CancelledError:
                     pass
-            return result
-        result = await _trigger_n8n_purchase(product_id, name, quantity, user_name)
-        return result
+        else:
+            result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
+
+        # Convert the raw result to a human-readable message
+        if result.get("success"):
+            qty_str = f"{quantity} unit(s) of" if quantity > 1 else ""
+            return (
+                f"Order placed successfully! {user_name.strip()} ordered {qty_str} {product_name}. "
+                f"Confirm this to the customer in a friendly way."
+            )
+        else:
+            error = result.get("error", "unknown issue")
+            logger.error("Purchase failed for %s: %s", product_id, error)
+            return "Sorry, something went wrong while placing the order. Ask the customer to try again in a moment."
+
+    @function_tool()
+    async def end_call(
+        self,
+        context: RunContext,
+    ) -> str:
+        """End the phone call and disconnect. Call this AFTER you have already said goodbye to the customer.
+        Use this when:
+        - The customer has completed a purchase and you have confirmed the order and said thank you.
+        - The customer says they are not interested, do not want to buy, or want to hang up.
+        Always say a friendly goodbye sentence BEFORE calling this.
+        """
+        logger.info("Agent ending call — goodbye spoken, disconnecting.")
+
+        async def _delayed_disconnect() -> None:
+            # Wait briefly so the TTS goodbye finishes playing before we disconnect
+            await asyncio.sleep(self.END_CALL_DELAY)
+            self._disconnect_event.set()
+
+        asyncio.create_task(_delayed_disconnect())
+        return "Call is ending. Do not say anything else."
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -242,6 +305,8 @@ async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
     logger.info("Apple seller agent connected to room: %s", room_name)
 
+    disconnect_event = asyncio.Event()
+
     session = AgentSession(
         stt=assemblyai.STT(),
         llm=groq.LLM(model="llama-3.1-8b-instant"),
@@ -250,15 +315,13 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     await session.start(
-        agent=AppleSellerAgent(),
+        agent=AppleSellerAgent(disconnect_event=disconnect_event),
         room=ctx.room,
     )
 
     logger.info("Apple seller session started in room: %s", room_name)
     await session.say("Hi! I'm your Apple sales assistant. I can show you our latest products and prices, or help you place an order. What are you looking for?")
     logger.info("Greeting sent, session running...")
-
-    disconnect_event = asyncio.Event()
 
     async def on_shutdown() -> None:
         disconnect_event.set()
