@@ -276,14 +276,17 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
     async def end_call(
         self,
         context: RunContext,
+        reason: str = "conversation complete",
     ) -> str:
         """End the phone call and disconnect. Call this AFTER you have already said goodbye to the customer.
         Use this when:
         - The customer has completed a purchase and you have confirmed the order and said thank you.
         - The customer says they are not interested, do not want to buy, or want to hang up.
         Always say a friendly goodbye sentence BEFORE calling this.
+        Args:
+            reason: Brief reason for ending (e.g. 'purchase complete' or 'customer not interested'). Default is 'conversation complete'.
         """
-        logger.info("Agent ending call — goodbye spoken, disconnecting.")
+        logger.info("Agent ending call — reason: %s", reason)
 
         async def _delayed_disconnect() -> None:
             # Wait briefly so the TTS goodbye finishes playing before we disconnect
