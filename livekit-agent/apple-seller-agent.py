@@ -34,6 +34,12 @@ logger.setLevel(logging.INFO)
 N8N_PURCHASE_WEBHOOK_URL = os.getenv("N8N_PURCHASE_WEBHOOK_URL", "").strip()
 N8N_PRICES_WEBHOOK_URL = os.getenv("N8N_PRICES_WEBHOOK_URL", "").strip()
 
+logger.info(
+    "Webhook config — purchase: %s, prices: %s",
+    N8N_PURCHASE_WEBHOOK_URL or "(NOT SET)",
+    N8N_PRICES_WEBHOOK_URL or "(NOT SET)",
+)
+
 # Delay before speaking a "one moment" message during slow tool calls (seconds)
 TOOL_STATUS_UPDATE_DELAY = 0.6
 
@@ -95,6 +101,7 @@ async def _trigger_n8n_purchase(
         "quantity": quantity,
         "user_name": (user_name or "").strip(),
     }
+    logger.info("POSTing to purchase webhook: %s with payload: %s", N8N_PURCHASE_WEBHOOK_URL, payload)
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -103,6 +110,7 @@ async def _trigger_n8n_purchase(
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 text = await resp.text()
+                logger.info("Purchase webhook response: status=%s body=%s", resp.status, text[:500])
                 if resp.status >= 400:
                     return {"success": False, "error": f"Webhook returned {resp.status}", "body": text}
                 try:
@@ -226,6 +234,11 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
         Returns:
             A plain-English result. Relay it to the customer naturally — never read out technical details.
         """
+        logger.info(
+            "trigger_purchase CALLED — product_id=%s, quantity=%d, user_name=%s",
+            product_id, quantity, user_name,
+        )
+
         # Validate inputs
         if not product_id or not product_id.strip():
             return "Could not place the order — no product was specified. Ask the customer which product they want."
