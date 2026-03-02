@@ -23,7 +23,7 @@ from livekit.agents import (
     AutoSubscribe,
     function_tool,
 )
-from livekit.plugins import assemblyai, cartesia, groq, silero
+from livekit.plugins import openai, silero
 
 load_dotenv()
 
@@ -324,9 +324,31 @@ async def entrypoint(ctx: JobContext) -> None:
     disconnect_event = asyncio.Event()
 
     session = AgentSession(
-        stt=assemblyai.STT(),
-        llm=groq.LLM(model="llama-3.1-8b-instant"),
-        tts=cartesia.TTS(),
+#     		stt=assemblyai.STT(),
+#         llm=groq.LLM(model="llama-3.1-8b-instant"),
+#         tts=cartesia.TTS(),
+        stt=openai.STT.with_azure(
+            model="gpt-4o-transcribe",
+            azure_deployment="gpt-4o-transcribe",
+            azure_endpoint=os.environ["AZURE_STT_ENDPOINT"],
+            api_key=os.environ["AZURE_STT_API_KEY"],
+            api_version="2025-03-01-preview",
+        ),
+        llm=openai.LLM.with_azure(
+            model="gpt-4o-mini",
+            azure_deployment="gpt-4o-mini",
+            azure_endpoint=os.environ["AZURE_LLM_ENDPOINT"],
+            api_key=os.environ["AZURE_LLM_API_KEY"],
+            api_version="2025-01-01-preview",
+        ),
+        tts=openai.TTS.with_azure(
+            model="gpt-4o-mini-tts",
+            voice="coral",
+            azure_deployment="gpt-4o-mini-tts",
+            azure_endpoint=os.environ["AZURE_TTS_ENDPOINT"],
+            api_key=os.environ["AZURE_TTS_API_KEY"],
+            api_version="2025-03-01-preview",
+        ),
         vad=ctx.proc.userdata["vad"],
     )
 
