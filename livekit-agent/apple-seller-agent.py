@@ -106,10 +106,16 @@ async def _fetch_prices_from_webhook() -> list[dict[str, Any]]:
                     logger.warning("Prices webhook returned status %s", resp.status)
                     return []
                 data = await resp.json()
+                logger.info("Prices webhook raw response type=%s len=%s", type(data).__name__, len(data) if isinstance(data, (list, dict)) else "n/a")
                 if isinstance(data, list):
-                    return _normalize_products_response(data)
+                    out = _normalize_products_response(data)
+                    logger.info("Prices webhook normalized list -> %d products", len(out))
+                    return out
                 if isinstance(data, dict) and "products" in data:
-                    return _normalize_products_response(data["products"])
+                    out = _normalize_products_response(data["products"])
+                    logger.info("Prices webhook normalized dict.products -> %d products", len(out))
+                    return out
+                logger.warning("Prices webhook unexpected shape: no list or dict.products")
                 return []
     except Exception as e:
         logger.warning("Failed to fetch prices from webhook: %s", e)
@@ -170,8 +176,9 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
 5. Keep your replies short and voice-friendly. List at most 3-4 products at a time. If there are more, offer to tell them about the rest.
 6. When the user wants to buy, ask for their name first if you don't have it, confirm the product and quantity, then place the order and tell them the result.
 7. If the user is unsure, suggest 2-3 options based on their needs. Do not make up prices — always use the tools to get real data.
-8. Do not use emojis, asterisks, bullet points, or any visual formatting. Speak in plain sentences.
-9. ENDING THE CALL: After a successful purchase, say a brief thank-you and goodbye, then end the call. If the customer says they are not interested, not looking to buy, or wants to end the conversation, say a polite goodbye and end the call. Always say goodbye BEFORE ending the call so the customer hears it."""
+8. When the customer asks about ANY specific product by name or type (e.g. iPhone 17, iPhone 16, MacBook, iPad), you MUST call the price lookup tool first. Never say a product is unavailable or not in stock without having called the tool — our catalog may include products you do not know about.
+9. Do not use emojis, asterisks, bullet points, or any visual formatting. Speak in plain sentences.
+10. ENDING THE CALL: After a successful purchase, say a brief thank-you and goodbye, then end the call. If the customer says they are not interested, not looking to buy, or wants to end the conversation, say a polite goodbye and end the call. Always say goodbye BEFORE ending the call so the customer hears it."""
         )
 
     @function_tool()
@@ -181,10 +188,10 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
         category: str = "",
         search_term: str = "",
     ) -> str:
-        """Look up Apple product prices. Use when the customer asks about prices, products, or what is available.
+        """Look up Apple product prices. CALL THIS whenever the customer asks about a product by name (e.g. iPhone 17, iPhone 16, MacBook), prices, or what is available. Our catalog is loaded from a live source — always use this tool instead of guessing availability.
         Args:
             category: Filter by product type: iPhone, iPad, Mac, Accessories, Watch. Leave empty to show all.
-            search_term: Optional keyword to narrow results (e.g. 'pro', 'air', 'macbook').
+            search_term: Product name or keyword (e.g. 'iPhone 17', 'iphone 17', 'macbook', 'pro'). Use the exact phrase the customer said.
         Returns:
             A plain-English summary of matching products. Read it back to the customer naturally — never read out field names or IDs.
         """
@@ -214,13 +221,35 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE:
         category_clean = category.strip().lower() if category else ""
         search_clean = search_term.strip().lower() if search_term else ""
 
+        logger.info(
+            "get_apple_prices called category=%r search_term=%r → %d products from source",
+            category_clean or "(all)",
+            search_clean or "(none)",
+            len(products),
+        )
+        if products:
+            logger.info(
+                "Sample product ids/names: %s",
+                [(p.get("id"), p.get("name")) for p in products[:5]],
+            )
+
         if category_clean:
             products = [p for p in products if (p.get("category") or "").lower() == category_clean]
         if search_clean:
+            # Match flexibly: "iphone 17" should match id "iphone-17" and name "iPhone 17"
+            def _normalize_for_match(s: str) -> str:
+                return (s or "").lower().replace(" ", "").replace("-", "")
+
+            search_norm = _normalize_for_match(search_clean)
             products = [
                 p for p in products
-                if search_clean in (p.get("name") or "").lower() or search_clean in (p.get("id") or "").lower()
+                if search_clean in (p.get("name") or "").lower()
+                or search_clean in (p.get("id") or "").lower()
+                or (search_norm and search_norm in _normalize_for_match(str(p.get("name") or "")))
+                or (search_norm and search_norm in _normalize_for_match(str(p.get("id") or "")))
             ]
+
+        logger.info("After filters: %d products", len(products))
 
         if not products:
             return "No matching products found. Ask the customer if they'd like to try a different category or search."
