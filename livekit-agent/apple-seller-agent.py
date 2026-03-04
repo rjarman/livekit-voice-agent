@@ -411,7 +411,7 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         tts=openai.TTS.with_azure(
             model="tts",
-            voice="coral",
+            voice="nova",
             azure_deployment="tts",
             azure_endpoint=os.environ["AZURE_TTS_ENDPOINT"],
             api_key=os.environ["AZURE_TTS_API_KEY"],
