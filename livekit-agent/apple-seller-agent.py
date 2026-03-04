@@ -396,8 +396,8 @@ async def entrypoint(ctx: JobContext) -> None:
 #         llm=groq.LLM(model="llama-3.1-8b-instant"),
 #         tts=cartesia.TTS(),
         stt=openai.STT.with_azure(
-            model="gpt-4o-transcribe",
-            azure_deployment="gpt-4o-transcribe",
+            model="gpt-4o-mini-transcribe",
+            azure_deployment="gpt-4o-mini-transcribe",
             azure_endpoint=os.environ["AZURE_STT_ENDPOINT"],
             api_key=os.environ["AZURE_STT_API_KEY"],
             api_version="2025-03-01-preview",
@@ -410,9 +410,9 @@ async def entrypoint(ctx: JobContext) -> None:
             api_version="2025-01-01-preview",
         ),
         tts=openai.TTS.with_azure(
-            model="gpt-4o-mini-tts",
+            model="tts",
             voice="coral",
-            azure_deployment="gpt-4o-mini-tts",
+            azure_deployment="tts",
             azure_endpoint=os.environ["AZURE_TTS_ENDPOINT"],
             api_key=os.environ["AZURE_TTS_API_KEY"],
             api_version="2025-03-01-preview",
