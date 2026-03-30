@@ -1,0 +1,4 @@
+[general]
+rtpstart=${SIP_GATEWAY_RTP_START}
+rtpend=${SIP_GATEWAY_RTP_END}
+icesupport=no
