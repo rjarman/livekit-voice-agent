@@ -1,6 +1,6 @@
-# Asterisk is in Debian repos on linux/amd64 only (not arm64). Build on your x86_64 server,
-# or from any host: docker compose build --platform linux/amd64 sip-gateway
-FROM --platform=linux/amd64 debian:bookworm-slim
+# Debian 12 (bookworm) does not ship an `asterisk` package in stable; use bullseye where it is still available.
+# See: https://tracker.debian.org/pkg/asterisk
+FROM debian:bullseye-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
