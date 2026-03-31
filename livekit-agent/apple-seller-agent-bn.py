@@ -22,7 +22,7 @@ from livekit.agents import (
     AutoSubscribe,
     function_tool,
 )
-from livekit.plugins import cartesia, google, groq, openai, silero
+from livekit.plugins import cartesia, google, groq, openai, silero, assemblyai
 
 load_dotenv()
 
@@ -369,7 +369,8 @@ async def entrypoint(ctx: JobContext) -> None:
     disconnect_event = asyncio.Event()
 
     session = AgentSession(
-        stt=cartesia.STT(),
+        # stt=cartesia.STT(),
+        stt=assemblyai.STT(language="bn"),
         # llm=groq.LLM(model="llama-3.3-70b-versatile"),
         llm=openai.LLM.with_azure(
             model="gpt-4o-mini",

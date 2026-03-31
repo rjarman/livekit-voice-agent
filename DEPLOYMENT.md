@@ -31,3 +31,7 @@ Numbers = <username number from bdcom>
 Username = <username number from bdcom>
 Password = <password number from bdcom>
 ```
+- Minimum VM Requirements:
+    - RAM 8GB
+    - CORE 4
+    - SSD 80GB
