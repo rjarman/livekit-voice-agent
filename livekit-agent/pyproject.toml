@@ -11,6 +11,7 @@ dependencies = [
     "livekit-plugins-assemblyai>=0.2.0",
     "livekit-plugins-groq>=0.2.0",
     "livekit-plugins-cartesia>=0.4.0",
+    "livekit-plugins-google>=0.1.0",
     "python-dotenv>=1.0.0",
 ]
 
