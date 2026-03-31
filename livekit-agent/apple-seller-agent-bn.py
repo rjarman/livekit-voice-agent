@@ -370,9 +370,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         # stt=cartesia.STT(),
-        stt=assemblyai.STT(
-            options=assemblyai.STTOptions(language_code="bn"),
-        ),
+        stt=assemblyai.STT(),
         # llm=groq.LLM(model="llama-3.3-70b-versatile"),
         llm=openai.LLM.with_azure(
             model="gpt-4o-mini",
