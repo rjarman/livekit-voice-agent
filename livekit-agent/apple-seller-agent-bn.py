@@ -370,7 +370,14 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         stt=cartesia.STT(),
-        llm=groq.LLM(model="llama-3.3-70b-versatile"),
+        # llm=groq.LLM(model="llama-3.3-70b-versatile"),
+        llm=openai.LLM.with_azure(
+            model="gpt-4o-mini",
+            azure_deployment="gpt-4o-mini",
+            azure_endpoint=os.environ["AZURE_LLM_ENDPOINT"],
+            api_key=os.environ["AZURE_LLM_API_KEY"],
+            api_version="2025-01-01-preview",
+        ),
         # llm=google.LLM(model="google/gemini-2.5-flash-lite"),
         tts=cartesia.TTS(),
         # If you prefer Azure instead of Groq/Cartesia, you can switch these the same way as in the English agent.
