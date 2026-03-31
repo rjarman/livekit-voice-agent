@@ -22,7 +22,7 @@ from livekit.agents import (
     AutoSubscribe,
     function_tool,
 )
-from livekit.plugins import cartesia, groq, openai, silero
+from livekit.plugins import cartesia, gemini, groq, openai, silero
 
 load_dotenv()
 
@@ -370,7 +370,8 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         stt=cartesia.STT(),
-        llm=groq.LLM(model="llama-3.1-8b-instant"),
+        # llm=groq.LLM(model="llama-3.1-8b-instant"),
+        llm=gemini.LLM(model="gemini-2.5-flash"),
         tts=cartesia.TTS(),
         # If you prefer Azure instead of Groq/Cartesia, you can switch these the same way as in the English agent.
         vad=ctx.proc.userdata["vad"],
