@@ -370,8 +370,8 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         stt=cartesia.STT(),
-        # llm=groq.LLM(model="llama-3.1-8b-instant"),
-        llm=google.LLM(model="google/gemini-2.5-flash-lite"),
+        llm=groq.LLM(model="llama-3.1-8b-instant"),
+        # llm=google.LLM(model="google/gemini-2.5-flash-lite"),
         tts=cartesia.TTS(),
         # If you prefer Azure instead of Groq/Cartesia, you can switch these the same way as in the English agent.
         vad=ctx.proc.userdata["vad"],
