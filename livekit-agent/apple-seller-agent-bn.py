@@ -420,7 +420,7 @@ async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         # --- STT: Google Cloud Speech-to-Text (Bengali) ---
         # chirp_2 supports bn-IN; latest_long does NOT.
-        stt=google.STT(languages="bn-IN", model="chirp_2"),
+        stt=google.STT(languages="bn-BD", model="chirp_2", location="asia-southeast1"),
 
         # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
         llm=google.LLM(model="gemini-2.5-flash"),
@@ -431,7 +431,7 @@ async def entrypoint(ctx: JobContext) -> None:
         tts=google.TTS(
             model_name="gemini-2.5-flash-tts",
             voice_name="Kore",
-            language="bn-IN",
+            language="bn-BD",
         ),
 
         vad=ctx.proc.userdata["vad"],
