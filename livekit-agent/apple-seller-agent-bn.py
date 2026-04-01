@@ -25,10 +25,11 @@ from livekit.agents import (
 from livekit.plugins import cartesia, google, groq, openai, silero, assemblyai
 
 # ---------------------------------------------------------------------------
-# Bengali agent provider stack (all Google):
-#   STT: Google Cloud Speech-to-Text  (bn-IN, requires GOOGLE_APPLICATION_CREDENTIALS)
-#   LLM: Gemini 2.5 Flash             (GOOGLE_API_KEY)
-#   TTS: Google Cloud Text-to-Speech   (bn-IN Wavenet, same creds as STT)
+# Bengali agent provider stack:
+#   Gemini Native Audio (RealtimeModel) — single model handles STT + LLM + TTS
+#   Model: gemini-live-2.5-flash-native-audio
+#   Auth:  GOOGLE_API_KEY
+#   Much lower latency than separate STT → LLM → TTS pipeline.
 # ---------------------------------------------------------------------------
 
 load_dotenv()
@@ -418,33 +419,17 @@ async def entrypoint(ctx: JobContext) -> None:
 
     disconnect_event = asyncio.Event()
 
+    # --- Gemini Native Audio: single model handles STT + LLM + TTS ---
+    # Much lower latency (~1-2s) vs separate STT→LLM→TTS pipeline (~4-6s).
+    # Uses GOOGLE_API_KEY (same key as before).
+    realtime_model = google.realtime.RealtimeModel(
+        model="gemini-live-2.5-flash-native-audio",
+        voice="Kore",
+        language="bn-BD",
+    )
+
     session = AgentSession(
-        # --- STT: Google Cloud Speech-to-Text (Bengali) ---
-        stt=google.STT(
-            languages="bn-BD",
-            model="chirp_2",
-            location="asia-southeast1",
-        ),
-
-        # --- LLM: Gemini 2.5 Flash ---
-        # thinking_budget=0 disables thinking mode which causes empty responses
-        # in multi-turn conversations with function tools
-        llm=google.LLM(
-            model="gemini-2.5-flash",
-            temperature=0.7,
-            thinking_config={"thinking_budget": 0},
-        ),
-
-        # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
-        # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
-        tts=google.TTS(
-            model_name="gemini-2.5-flash-tts",
-            voice_name="Kore",
-            language="bn-BD",
-            prompt="Speak in a warm, friendly, natural Bengali tone. Moderate pace, clear pronunciation.",
-            speaking_rate=1.15,
-        ),
-
+        llm=realtime_model,
         vad=ctx.proc.userdata["vad"],
     )
 
