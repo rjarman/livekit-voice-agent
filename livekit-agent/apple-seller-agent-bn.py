@@ -24,6 +24,13 @@ from livekit.agents import (
 )
 from livekit.plugins import cartesia, google, groq, openai, silero, assemblyai
 
+# ---------------------------------------------------------------------------
+# Bengali agent provider stack (all Google):
+#   STT: Google Cloud Speech-to-Text  (bn-IN, requires GOOGLE_APPLICATION_CREDENTIALS)
+#   LLM: Gemini 2.5 Flash             (GOOGLE_API_KEY)
+#   TTS: Google Cloud Text-to-Speech   (bn-IN Wavenet, same creds as STT)
+# ---------------------------------------------------------------------------
+
 load_dotenv()
 
 logger = logging.getLogger("apple-seller-agent-bn")
@@ -162,22 +169,32 @@ class AppleSellerAgentBn(Agent):
 
     def __init__(self, disconnect_event: asyncio.Event) -> None:
         self._disconnect_event = disconnect_event
+        # NOTE: System prompt is in English with explicit "reply in Bengali" instruction.
+        # This works MUCH better than writing the entire prompt in Bengali because:
+        # 1. LLMs follow English instructions more reliably (stronger instruction tuning)
+        # 2. Bengali-only prompts often cause the model to mix languages or ignore rules
+        # 3. The model still generates Bengali output because rule #1 explicitly requires it
         super().__init__(
             instructions="""\
-আপনি একটি ভয়েস কলে একজন বন্ধুত্বপূর্ণ Apple পণ্যের বিক্রেতা। ব্যবহারকারী আপনার সাথে বাংলায় কথা বলছে।
-আপনার কাজ হলো গ্রাহককে সঠিক Apple পণ্য (iPhone, iPad, Mac, AirPods, Apple Watch ইত্যাদি) বেছে নিতে সাহায্য করা এবং তারা চাইলে ক্রয় সম্পন্ন করা।
+You are a friendly Apple product seller on a voice call. The customer speaks Bengali (Bangla). \
+You MUST reply ONLY in natural, spoken Bengali. Every word you speak must be Bengali, \
+except product names like "iPhone", "MacBook", "AirPods" which stay in English.
 
-কঠোর নিয়ম — প্রতিটা অবশ্যই মেনে চলবেন:
-1. আপনি সবসময় শুধু স্বাভাবিক, কথোপকথনের মতো বাংলা বাক্যে কথা বলবেন। ছোট, পরিষ্কার বাক্য ব্যবহার করবেন।
-2. কখনও কোনো ফাংশনের নাম, ভেরিয়েবলের নাম, প্যারামিটারের নাম, বা কোডের মতো শব্দ উচ্চারণ করবেন না। উদাহরণ: "get_apple_prices", "trigger_purchase", "product_id", "price_usd", "search_term", "category", "user_name", "quantity" — এ ধরনের কোনো শব্দ মুখে আনবেন না। যদি মনে হয় এমন কিছু বলছেন, সাথে সাথেই সাধারণ বাংলায় বলে নেবেন।
-3. আপনি ভেতরে কী করছেন তা কখনও মুখে বলবেন না। যেমন: "আমি এখন দামের তথ্য আনছি", "আমি একটা টুল কল করছি", "আমি এখন সার্চ করছি" — এসব কথা বলবেন না। ভেতরের কাজ চুপচাপ করবেন, বাইরে শুধু ফলাফলের উপর ভিত্তি করে স্বাভাবিকভাবে কথা বলবেন।
-4. কখনও JSON কী, ফিল্ডের নাম, বা আর্গুমেন্টের মান পড়ে শোনাবেন না। সবসময় ডেটাকে প্রাকৃতিক কথায় রূপান্তর করবেন। যেমন "price_usd 799" না বলে বলবেন "দাম প্রায় সাতশো নিরানব্বই ডলার", আর "product_id iphone-16" না বলে বলবেন "iPhone 16"।
-5. প্রতিবার উত্তরে কণ্ঠস্বরের জন্য উপযোগী, ছোট ও সহজ উত্তর দিন। একবারে সর্বোচ্চ তিন থেকে চারটি পণ্যের কথা বলবেন। এর বেশি থাকলে গ্রাহককে জিজ্ঞেস করুন, আরও শুনতে চান কি না।
-6. গ্রাহক যখন কিনতে চাইবেন, আগে যদি নাম না জানা থাকে, বিনয়ের সাথে তার নাম জিজ্ঞেস করুন, তারপর যে পণ্য আর যত পরিমাণ কিনতে চান তা আবার একবার নিশ্চিত করুন, তারপর অর্ডার দিন এবং ফলাফল পরিষ্কার বাংলায় জানিয়ে দিন।
-7. যদি গ্রাহক দ্বিধায় থাকেন, তাদের প্রয়োজন বুঝে দুই–তিনটি অপশন সাজেস্ট করুন। কখনও দাম আন্দাজ করে বলবেন না — সবসময় দামের তথ্য পেতে নির্ধারিত টুল ব্যবহার করবেন।
-8. গ্রাহক যখন কোনো নির্দিষ্ট পণ্যের নাম বা ধরন (যেমন iPhone 17, iPhone 16, MacBook, iPad) নিয়ে দাম বা প্রাপ্যতা জানতে চাইবেন, তখন আপনাকে অবশ্যই প্রথমে প্রাইস লুকআপ টুল কল করতে হবে। টুল না ডেকে কখনও বলবেন না যে কোনো পণ্য নেই বা স্টকে নেই — আমাদের ক্যাটালগে অতিরিক্ত পণ্য থাকতে পারে।
-9. কোনো ইমোজি, তারকা চিহ্ন, বুলেট পয়েন্ট বা অন্য কোনো ভিজ্যুয়াল ফরম্যাটিং ব্যবহার করবেন না। শুধুই সাধারণ বাংলা বাক্য ব্যবহার করবেন।
-10. কল শেষ করার নিয়ম: অর্ডার সফল হলে এক লাইনের মত করে ধন্যবাদ ও বিদায় জানিয়ে তারপর কল শেষ করবেন। যদি গ্রাহক বলে যে তারা আগ্রহী না, কিনতে চায় না, বা কথা শেষ করতে চায়, তাহলে ভদ্রভাবে বাংলায় ধন্যবাদ ও বিদায় জানিয়ে কল শেষ করবেন। সবসময় কল কেটে দেওয়ার আগে বিদায় বাক্যটি বলবেন যাতে গ্রাহক সেটা শুনতে পারেন।"""
+RULES:
+1. Speak ONLY natural, short Bengali sentences. This is a phone call. Keep answers brief and conversational, like talking to a friend.
+2. NEVER say any function name, variable, parameter, JSON key, or code-like word out loud. \
+Forbidden: "get_apple_prices", "trigger_purchase", "product_id", "price_usd". \
+Say prices as spoken Bengali numbers, e.g. "saat shoh nirannobboi dollar" not "799".
+3. NEVER narrate your internal actions. Do NOT say "ami daam dekhchi" or "ami tool call korchi". \
+Just do it silently, then speak the result naturally.
+4. When a customer asks about ANY product by name or type, you MUST call the price lookup tool first. \
+Never say a product is unavailable without checking the catalog.
+5. List at most 3 products at a time. Ask if they want to hear more.
+6. To purchase: ask for the customer's name (if unknown), confirm the product and quantity in Bengali, then place the order.
+7. Never guess prices. Always use the tool.
+8. No emoji, no asterisks, no bullet points, no markdown. Plain spoken Bengali only.
+9. After a successful order or when the customer wants to end, say a brief goodbye in Bengali, then end the call. \
+Always say goodbye BEFORE ending so the customer hears it."""
         )
 
     @function_tool()
@@ -187,12 +204,19 @@ class AppleSellerAgentBn(Agent):
         category: str = "",
         search_term: str = "",
     ) -> str:
-        """Look up Apple product prices. Same semantics as the English agent."""
+        """Look up Apple product prices. CALL THIS whenever the customer asks about a product by name, prices, or availability.
+        Args:
+            category: Filter by product type: iPhone, iPad, Mac, Accessories, Watch. Leave empty for all.
+            search_term: Product name or keyword the customer said (e.g. 'iPhone 16', 'macbook', 'airpods').
+        Returns:
+            Product list. Present these to the customer in natural Bengali speech. Never read out order codes.
+        """
 
         async def _speak_fetching_prices() -> None:
             await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
-            await context.session.generate_reply(
-                instructions="Say one very short sentence in Bengali: you are checking the latest prices, one moment. No lists or details."
+            session = context.session
+            await session.generate_reply(
+                instructions="Reply with exactly one short Bengali sentence telling the customer to wait a moment while you check. Example: 'ektu darun, ami dekhchi.' Do not say anything else."
             )
 
         if N8N_PRICES_WEBHOOK_URL:
@@ -216,7 +240,7 @@ class AppleSellerAgentBn(Agent):
         search_clean = search_term.strip().lower() if search_term else ""
 
         logger.info(
-            "get_apple_prices (bn) called category=%r search_term=%r → %d products from source",
+            "get_apple_prices (bn) called category=%r search_term=%r -> %d products from source",
             category_clean or "(all)",
             search_clean or "(none)",
             len(products),
@@ -230,7 +254,6 @@ class AppleSellerAgentBn(Agent):
         if category_clean:
             products = [p for p in products if (p.get("category") or "").lower() == category_clean]
         if search_clean:
-            # Match flexibly: "iphone 17" should match id "iphone-17" and name "iPhone 17"
             def _normalize_for_match(s: str) -> str:
                 return (s or "").lower().replace(" ", "").replace("-", "")
 
@@ -247,9 +270,12 @@ class AppleSellerAgentBn(Agent):
         logger.info("After filters (bn): %d products", len(products))
 
         if not products:
-            return "কোনো মিল পাওয়া যায়নি। গ্রাহককে বিনয়ের সাথে জিজ্ঞেস করুন, তারা কি অন্য ক্যাটাগরি বা ভিন্নভাবে খুঁজতে চান।"
+            return (
+                "No matching products found. "
+                "Tell the customer politely in Bengali that you could not find that product, "
+                "and ask if they would like to look at a different category or try a different name."
+            )
 
-        # Keep the same English text structure so tools stay interoperable; the agent will still speak Bengali.
         lines = []
         for p in products:
             name = p.get("name", "Unknown")
@@ -263,9 +289,11 @@ class AppleSellerAgentBn(Agent):
             lines.append(line)
 
         return (
-            f"{len(products)} product(s) available:\n"
+            f"{len(products)} product(s) found:\n"
             + "\n".join(lines)
-            + "\n\nTell the customer about these products in natural Bengali speech. Never read out the order codes — those are only for placing orders internally."
+            + "\n\nPresent these to the customer in natural Bengali speech. "
+            "Say product names in English but describe prices and details in Bengali. "
+            "Never read out the order codes aloud."
         )
 
     @function_tool()
@@ -276,7 +304,14 @@ class AppleSellerAgentBn(Agent):
         quantity: int = 1,
         user_name: str = "",
     ) -> str:
-        """Place a purchase order for the customer. Same behavior as English agent."""
+        """Place a purchase order. Only call AFTER the customer confirmed they want to buy and gave their name.
+        Args:
+            product_id: The order code (e.g. iphone-16, airpods-pro-2).
+            quantity: How many units (default 1).
+            user_name: The customer's name (must ask before calling this).
+        Returns:
+            Result message. Relay to the customer in natural Bengali.
+        """
         logger.info(
             "trigger_purchase (bn) CALLED — product_id=%s, quantity=%d, user_name=%s",
             product_id,
@@ -285,13 +320,19 @@ class AppleSellerAgentBn(Agent):
         )
 
         if not product_id or not product_id.strip():
-            return "অর্ডার করা সম্ভব হয়নি — কোনো পণ্যের তথ্য পাওয়া যায়নি। আগে গ্রাহকের কাছ থেকে নিশ্চিত হয়ে পণ্যের নাম জেনে নিন।"
+            return (
+                "Order could not be placed — no product specified. "
+                "Ask the customer in Bengali which product they want to order."
+            )
 
         if quantity < 1:
-            return "অর্ডার করা সম্ভব হয়নি — পরিমাণ কমপক্ষে ১ হতে হবে।"
+            return "Order could not be placed — quantity must be at least 1. Ask the customer again in Bengali."
 
         if not user_name or not user_name.strip():
-            return "অর্ডার করা সম্ভব হয়নি — গ্রাহকের নাম প্রয়োজন। আগে বিনয়ের সাথে নাম জেনে নিন।"
+            return (
+                "Order could not be placed — customer name is required. "
+                "Politely ask for their name in Bengali before placing the order."
+            )
 
         product_name = next(
             (p["name"] for p in APPLE_PRODUCT_CATALOG if p.get("id") == product_id),
@@ -311,8 +352,9 @@ class AppleSellerAgentBn(Agent):
 
         async def _speak_processing_order() -> None:
             await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
-            await context.session.generate_reply(
-                instructions="Say one very short sentence in Bengali: you are processing the order, one moment. No lists or details."
+            session = context.session
+            await session.generate_reply(
+                instructions="Reply with exactly one short Bengali sentence telling the customer their order is being processed. Example: 'apnar order process hochchhe, ektu opekkha korun.' Do not say anything else."
             )
 
         if N8N_PURCHASE_WEBHOOK_URL:
@@ -329,14 +371,18 @@ class AppleSellerAgentBn(Agent):
             result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
 
         if result.get("success"):
-            qty_str = f"{quantity} টি" if quantity > 1 else "১ টি"
+            qty_label = f"{quantity}" if quantity > 1 else "1"
             return (
-                f"অর্ডার সফল হয়েছে! {user_name.strip()} {qty_str} {product_name} অর্ডার করেছেন। "
-                f"গ্রাহককে বন্ধুত্বপূর্ণভাবে বাংলায় এটি নিশ্চিত করে বলুন।"
+                f"Order successful! Customer {user_name.strip()} ordered {qty_label} x {product_name}. "
+                f"Confirm this to the customer in a warm, friendly Bengali sentence. "
+                f"Then say goodbye in Bengali and end the call."
             )
         error = result.get("error", "unknown issue")
         logger.error("Purchase failed (bn) for %s: %s", product_id, error)
-        return "দুঃখিত, অর্ডার করার সময় একটি সমস্যা হয়েছে। গ্রাহককে অনুরোধ করুন একটু পরে আবার চেষ্টা করতে।"
+        return (
+            "The order failed due to a technical issue. "
+            "Apologize to the customer in Bengali and ask them to try again shortly."
+        )
 
     @function_tool()
     async def end_call(
@@ -344,7 +390,10 @@ class AppleSellerAgentBn(Agent):
         context: RunContext,
         reason: str = "conversation complete",
     ) -> str:
-        """End the phone call and disconnect. Same semantics, but caller speaks Bengali."""
+        """End the phone call and disconnect. Call this AFTER you have already said goodbye in Bengali.
+        Args:
+            reason: Brief reason (e.g. 'purchase complete', 'customer not interested').
+        """
         logger.info("Bengali agent ending call — reason: %s", reason)
 
         async def _delayed_disconnect() -> None:
@@ -352,7 +401,7 @@ class AppleSellerAgentBn(Agent):
             self._disconnect_event.set()
 
         asyncio.create_task(_delayed_disconnect())
-        return "কল এখন শেষ হচ্ছে। আর কিছু বলবেন না।"
+        return "Call is ending now. Do not say anything else."
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -369,19 +418,23 @@ async def entrypoint(ctx: JobContext) -> None:
     disconnect_event = asyncio.Event()
 
     session = AgentSession(
-        # stt=cartesia.STT(),
-        stt=assemblyai.STT(),
-        # llm=groq.LLM(model="llama-3.3-70b-versatile"),
-        llm=openai.LLM.with_azure(
-            model=os.environ["AZURE_LLM_MODEL"],
-            azure_deployment=os.environ["AZURE_LLM_DEPLOYMENT"],
-            azure_endpoint=os.environ["AZURE_LLM_ENDPOINT"],
-            api_key=os.environ["AZURE_LLM_API_KEY"],
-            api_version=os.environ["AZURE_LLM_API_VERSION"],
-        ),
-        # llm=google.LLM(model="google/gemini-2.5-flash-lite"),
-        tts=cartesia.TTS(),
-        # If you prefer Azure instead of Groq/Cartesia, you can switch these the same way as in the English agent.
+        # --- STT: Google Cloud Speech-to-Text (Bengali) ---
+        # Requires GOOGLE_APPLICATION_CREDENTIALS pointing to a service-account JSON.
+        stt=google.STT(languages="bn-IN", model="latest_long"),
+        # Fallback if no GCP credentials:
+        # stt=assemblyai.STT(model="universal-streaming-multilingual"),
+
+        # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
+        # Uses GOOGLE_API_KEY env var.
+        llm=google.LLM(model="gemini-2.5-flash"),
+
+        # --- TTS: Google Cloud Text-to-Speech (Bengali) ---
+        # Uses the same GOOGLE_APPLICATION_CREDENTIALS as STT.
+        # voice_name "bn-IN-Wavenet-A" is female; "bn-IN-Wavenet-B" is male.
+        tts=google.TTS(language="bn-IN", voice_name="bn-IN-Wavenet-B"),
+        # Fallback if no GCP credentials:
+        # tts=cartesia.TTS(language="bn"),
+
         vad=ctx.proc.userdata["vad"],
     )
 
@@ -391,7 +444,7 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     logger.info("Apple seller Bengali session started in room: %s", room_name)
-    await session.say("হ্যালো! আমি আপনার Apple বিক্রয় সহকারী। আমি আপনাকে আমাদের সর্বশেষ পণ্য আর তাদের দাম জানাতে পারি, অথবা আপনার হয়ে অর্ডার করতে পারি। আপনি কী খুঁজছেন?")
+    await session.say("আসসালামু আলাইকুম! আমি আপনার Apple বিক্রয় সহকারী। আপনি কী খুঁজছেন?")
     logger.info("Bengali greeting sent, session running...")
 
     async def on_shutdown() -> None:
@@ -410,4 +463,3 @@ if __name__ == "__main__":
             agent_name="apple-seller-agent-bn",
         ),
     )
-
