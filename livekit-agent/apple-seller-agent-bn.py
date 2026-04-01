@@ -423,7 +423,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # Much lower latency (~1-2s) vs separate STT→LLM→TTS pipeline (~4-6s).
     # Uses GOOGLE_API_KEY (same key as before).
     realtime_model = google.realtime.RealtimeModel(
-        model="gemini-live-2.5-flash-native-audio",
+        model="gemini-2.5-flash-native-audio-preview-12-2025",
         voice="Kore",
         language="bn-BD",
     )
