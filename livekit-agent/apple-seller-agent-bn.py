@@ -421,24 +421,34 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         # --- STT: Google Cloud Speech-to-Text (Bengali) ---
-        # chirp_2 supports bn-IN; latest_long does NOT.
-        stt=google.STT(languages="bn-BD", model="chirp_2", location="asia-southeast1"),
+        # chirp_2 supports bn-BD; latest_long does NOT.
+        # speech_end_timeout: how long to wait after silence before finalizing (lower = faster)
+        stt=google.STT(
+            languages="bn-BD",
+            model="chirp_2",
+            location="asia-southeast1",
+            speech_end_timeout=1.0,
+        ),
 
         # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
         llm=google.LLM(model="gemini-2.5-flash"),
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
-        # prompt controls the speaking style; speaking_rate speeds up delivery
         tts=google.TTS(
             model_name="gemini-2.5-flash-tts",
             voice_name="Kore",
             language="bn-BD",
             prompt="Speak in a warm, friendly, natural Bengali tone. Moderate pace, clear pronunciation.",
-            speaking_rate=1.1,
+            speaking_rate=1.15,
         ),
 
         vad=ctx.proc.userdata["vad"],
+
+        # --- Turn detection tuning ---
+        # Reduce delay before the agent starts responding
+        min_endpointing_delay=0.3,
+        max_endpointing_delay=1.5,
     )
 
     await session.start(
