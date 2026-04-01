@@ -251,7 +251,7 @@ services:
     container_name: livekit-dashboard
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       LIVEKIT_URL: http://livekit:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
