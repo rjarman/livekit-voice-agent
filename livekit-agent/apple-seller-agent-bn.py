@@ -419,21 +419,20 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         # --- STT: Google Cloud Speech-to-Text (Bengali) ---
-        # Requires GOOGLE_APPLICATION_CREDENTIALS pointing to a service-account JSON.
-        stt=google.STT(languages="bn-IN", model="latest_long"),
-        # Fallback if no GCP credentials:
-        # stt=assemblyai.STT(model="universal-streaming-multilingual"),
+        # chirp_2 supports bn-IN; latest_long does NOT.
+        stt=google.STT(languages="bn-IN", model="chirp_2"),
 
         # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
-        # Uses GOOGLE_API_KEY env var.
         llm=google.LLM(model="gemini-2.5-flash"),
 
-        # --- TTS: Google Cloud Text-to-Speech (Bengali) ---
-        # Uses the same GOOGLE_APPLICATION_CREDENTIALS as STT.
-        # voice_name "bn-IN-Wavenet-A" is female; "bn-IN-Wavenet-B" is male.
-        tts=google.TTS(language="bn-IN", voice_name="bn-IN-Wavenet-B"),
-        # Fallback if no GCP credentials:
-        # tts=cartesia.TTS(language="bn"),
+        # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
+        # gemini-2.5-flash-tts is multilingual and works in streaming mode.
+        # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
+        tts=google.TTS(
+            model_name="gemini-2.5-flash-tts",
+            voice_name="Kore",
+            language="bn-IN",
+        ),
 
         vad=ctx.proc.userdata["vad"],
     )
