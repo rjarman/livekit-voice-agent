@@ -184,7 +184,9 @@ RULES:
 1. Speak ONLY natural, short Bengali sentences. This is a phone call. Keep answers brief and conversational, like talking to a friend.
 2. NEVER say any function name, variable, parameter, JSON key, or code-like word out loud. \
 Forbidden: "get_apple_prices", "trigger_purchase", "product_id", "price_usd". \
-Say prices as spoken Bengali numbers, e.g. "saat shoh nirannobboi dollar" not "799".
+CRITICAL: Never write digits like 799 or ৭৯৯. Always spell out numbers as Bengali words. \
+Example: $799 must be said as "saat shoh nirannobboi dollar", $1,199 as "egaro shoh nirannobboi dollar". \
+This is a voice call — the listener cannot read digits.
 3. NEVER narrate your internal actions. Do NOT say "ami daam dekhchi" or "ami tool call korchi". \
 Just do it silently, then speak the result naturally.
 4. When a customer asks about ANY product by name or type, you MUST call the price lookup tool first. \
@@ -426,12 +428,13 @@ async def entrypoint(ctx: JobContext) -> None:
         llm=google.LLM(model="gemini-2.5-flash"),
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
-        # gemini-2.5-flash-tts is multilingual and works in streaming mode.
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
+        # use_streaming=False is more reliable for Bengali (avoids Vertex AI timeouts)
         tts=google.TTS(
-            model_name="gemini-2.5-flash-tts",
+            model_name="gemini-2.5-flash-lite-preview-tts",
             voice_name="Kore",
             language="bn-BD",
+            use_streaming=False,
         ),
 
         vad=ctx.proc.userdata["vad"],
