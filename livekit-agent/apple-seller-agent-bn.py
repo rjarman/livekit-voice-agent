@@ -425,7 +425,6 @@ async def entrypoint(ctx: JobContext) -> None:
     realtime_model = google.realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-preview-12-2025",
         voice="Kore",
-        language="bn-BD",
     )
 
     session = AgentSession(
