@@ -200,6 +200,15 @@ Never say a product is unavailable without checking the catalog.
 Always say goodbye BEFORE ending so the customer hears it."""
         )
 
+    async def _speak_wait(self, context: RunContext, action: str) -> None:
+        """Say a short Bengali 'please wait' message after a brief delay."""
+        await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
+        if action == "prices":
+            msg = "Say exactly one short Bengali sentence: you are checking prices, please wait a moment. Example: 'ektu opekkha korun, daam dekhchhi.' Nothing else."
+        else:
+            msg = "Say exactly one short Bengali sentence: the order is being processed, please wait. Example: 'apnar order newa hochchhe, ektu opekkha korun.' Nothing else."
+        await context.session.generate_reply(instructions=msg)
+
     @function_tool()
     async def get_apple_prices(
         self,
@@ -215,15 +224,10 @@ Always say goodbye BEFORE ending so the customer hears it."""
             Product list. Present these to the customer in natural Bengali speech. Never read out order codes.
         """
 
-        async def _speak_fetching_prices() -> None:
-            await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
-            session = context.session
-            await session.generate_reply(
-                instructions="Reply with exactly one short Bengali sentence telling the customer to wait a moment while you check. Example: 'ektu darun, ami dekhchi.' Do not say anything else."
-            )
+        # Always tell the customer to wait while checking prices
+        status_task = asyncio.create_task(self._speak_wait(context, "prices"))
 
         if N8N_PRICES_WEBHOOK_URL:
-            status_task = asyncio.create_task(_speak_fetching_prices())
             fetch_task = asyncio.create_task(_fetch_prices_from_webhook())
             try:
                 products = await fetch_task
@@ -235,6 +239,11 @@ Always say goodbye BEFORE ending so the customer hears it."""
                     pass
         else:
             products = []
+            status_task.cancel()
+            try:
+                await status_task
+            except asyncio.CancelledError:
+                pass
 
         if not products:
             products = [p.copy() for p in APPLE_PRODUCT_CATALOG]
@@ -352,25 +361,16 @@ Always say goodbye BEFORE ending so the customer hears it."""
         if product_name is None:
             product_name = product_id
 
-        async def _speak_processing_order() -> None:
-            await asyncio.sleep(TOOL_STATUS_UPDATE_DELAY)
-            session = context.session
-            await session.generate_reply(
-                instructions="Reply with exactly one short Bengali sentence telling the customer their order is being processed. Example: 'apnar order process hochchhe, ektu opekkha korun.' Do not say anything else."
-            )
-
-        if N8N_PURCHASE_WEBHOOK_URL:
-            status_task = asyncio.create_task(_speak_processing_order())
-            try:
-                result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
-            finally:
-                status_task.cancel()
-                try:
-                    await status_task
-                except asyncio.CancelledError:
-                    pass
-        else:
+        # Always tell the customer to wait while processing
+        status_task = asyncio.create_task(self._speak_wait(context, "order"))
+        try:
             result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
+        finally:
+            status_task.cancel()
+            try:
+                await status_task
+            except asyncio.CancelledError:
+                pass
 
         if result.get("success"):
             qty_label = f"{quantity}" if quantity > 1 else "1"
