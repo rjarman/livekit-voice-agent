@@ -268,20 +268,40 @@ services:
       - backend
 
   caddy:
-    image: caddy:alpine
+    image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    # Explicit run so failures show in `docker compose logs caddy`
+    command:
+      - caddy
+      - run
+      - --config
+      - /etc/caddy/Caddyfile
+      - --adapter
+      - caddyfile
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     depends_on:
       - livekit
       - livekit-react-app
       - livekit-token-server
+      - livekit-dashboard
     networks:
       - backend
 
