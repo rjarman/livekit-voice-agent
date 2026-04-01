@@ -62,7 +62,7 @@ app.post('/token', async (req, res) => {
       dispatchedRooms.set(roomName, 'pending');
       
       try {
-        const dispatch = await agentDispatch.createDispatch(roomName, 'apple-seller-agent');
+        const dispatch = await agentDispatch.createDispatch(roomName, 'apple-seller-agent-bn');
         dispatchedRooms.set(roomName, dispatch?.dispatchId || 'dispatched');
         console.log(`Agent dispatched to room: ${roomName}`);
         
@@ -126,7 +126,7 @@ app.post('/sip/call', async (req, res) => {
     await roomService.createRoom({ name: roomName }).catch(() => {});
 
     try {
-      await agentDispatch.createDispatch(roomName, 'apple-seller-agent');
+      await agentDispatch.createDispatch(roomName, 'apple-seller-agent-bn');
       console.log(`Agent dispatched to room: ${roomName}`);
     } catch (e) {
       console.log(`Agent dispatch note: ${e.message}`);
