@@ -181,7 +181,7 @@ You MUST reply ONLY in natural, spoken Bengali. Every word you speak must be Ben
 except product names like "iPhone", "MacBook", "AirPods" which stay in English.
 
 RULES:
-1. Speak ONLY natural, short Bengali sentences. This is a phone call. Keep answers brief and conversational, like talking to a friend.
+1. Speak ONLY natural, short Bengali sentences. This is a phone call. Keep each reply to 2-3 sentences MAX. Never give long explanations.
 2. NEVER say any function name, variable, parameter, JSON key, or code-like word out loud. \
 Forbidden: "get_apple_prices", "trigger_purchase", "product_id", "price_usd". \
 CRITICAL: Never write digits like 799 or ৭৯৯. Always spell out numbers as Bengali words. \
@@ -429,12 +429,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
-        # use_streaming=False is more reliable for Bengali (avoids Vertex AI timeouts)
+        # prompt controls the speaking style; speaking_rate speeds up delivery
         tts=google.TTS(
-            model_name="gemini-2.5-flash-lite-preview-tts",
+            model_name="gemini-2.5-flash-tts",
             voice_name="Kore",
             language="bn-BD",
-            use_streaming=False,
+            prompt="Speak in a warm, friendly, natural Bengali tone. Moderate pace, clear pronunciation.",
+            speaking_rate=1.1,
         ),
 
         vad=ctx.proc.userdata["vad"],
