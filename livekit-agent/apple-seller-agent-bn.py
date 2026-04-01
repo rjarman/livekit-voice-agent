@@ -439,7 +439,9 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     logger.info("Apple seller Bengali session started in room: %s", room_name)
-    await session.say("আসসালামু আলাইকুম! আমি আপনার Apple বিক্রয় সহকারী। আপনি কী খুঁজছেন?")
+    await session.generate_reply(
+        instructions="Greet the customer warmly in Bengali. Say Assalamu Alaikum, introduce yourself as Apple sales assistant, and ask what they are looking for. Keep it to 2 short sentences."
+    )
     logger.info("Bengali greeting sent, session running...")
 
     async def on_shutdown() -> None:
