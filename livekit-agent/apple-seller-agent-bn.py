@@ -427,10 +427,14 @@ async def entrypoint(ctx: JobContext) -> None:
             location="asia-southeast1",
         ),
 
-        # --- LLM: Gemini ---
-        # gemini-2.5-flash returns empty responses with function tools.
-        # gemini-2.0-flash-001 (versioned) is stable and still available.
-        llm=google.LLM(model="gemini-2.0-flash-001", temperature=0.7),
+        # --- LLM: Gemini 2.5 Flash ---
+        # thinking_budget=0 disables thinking mode which causes empty responses
+        # in multi-turn conversations with function tools
+        llm=google.LLM(
+            model="gemini-2.5-flash",
+            temperature=0.7,
+            thinking_config={"thinking_budget": 0},
+        ),
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
