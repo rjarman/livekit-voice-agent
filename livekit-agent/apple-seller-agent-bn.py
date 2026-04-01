@@ -181,7 +181,7 @@ You MUST reply ONLY in natural, spoken Bengali. Every word you speak must be Ben
 except product names like "iPhone", "MacBook", "AirPods" which stay in English.
 
 RULES:
-1. Speak ONLY natural, short Bengali sentences. This is a phone call. Keep each reply to 2-3 sentences MAX. Never give long explanations.
+1. Speak ONLY natural, short Bengali sentences. This is a phone call. STRICT LIMIT: maximum 2 short sentences per reply. Mention only 1 product at a time unless the customer asks for a list. If listing, say just the name and price of each, nothing else.
 2. NEVER say any function name, variable, parameter, JSON key, or code-like word out loud. \
 Forbidden: "get_apple_prices", "trigger_purchase", "product_id", "price_usd". \
 CRITICAL: Never write digits like 799 or ৭৯৯. Always spell out numbers as Bengali words. \
@@ -293,9 +293,8 @@ Always say goodbye BEFORE ending so the customer hears it."""
         return (
             f"{len(products)} product(s) found:\n"
             + "\n".join(lines)
-            + "\n\nPresent these to the customer in natural Bengali speech. "
-            "Say product names in English but describe prices and details in Bengali. "
-            "Never read out the order codes aloud."
+            + "\n\nIMPORTANT: Only mention 2-3 products in ONE or TWO short Bengali sentences. "
+            "Ask if they want to hear more. Never read order codes aloud."
         )
 
     @function_tool()
