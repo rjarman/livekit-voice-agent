@@ -421,13 +421,10 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         # --- STT: Google Cloud Speech-to-Text (Bengali) ---
-        # chirp_2 supports bn-BD; latest_long does NOT.
-        # speech_end_timeout: how long to wait after silence before finalizing (lower = faster)
         stt=google.STT(
             languages="bn-BD",
             model="chirp_2",
             location="asia-southeast1",
-            speech_end_timeout=1.0,
         ),
 
         # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
@@ -444,11 +441,6 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
 
         vad=ctx.proc.userdata["vad"],
-
-        # --- Turn detection tuning ---
-        # Reduce delay before the agent starts responding
-        min_endpointing_delay=0.3,
-        max_endpointing_delay=1.5,
     )
 
     await session.start(
