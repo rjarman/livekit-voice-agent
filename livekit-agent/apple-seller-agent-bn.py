@@ -427,8 +427,9 @@ async def entrypoint(ctx: JobContext) -> None:
             location="asia-southeast1",
         ),
 
-        # --- LLM: Gemini 2.5 Flash (excellent Bengali) ---
-        llm=google.LLM(model="gemini-2.5-flash"),
+        # --- LLM: Gemini Flash ---
+        # gemini-2.0-flash is more stable (2.5 sometimes returns empty responses)
+        llm=google.LLM(model="gemini-2.0-flash", temperature=0.7),
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
