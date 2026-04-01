@@ -427,8 +427,17 @@ async def entrypoint(ctx: JobContext) -> None:
             location="asia-southeast1",
         ),
 
-        # --- LLM: Gemini 2.5 Flash ---
-        llm=google.LLM(model="gemini-2.5-flash", temperature=0.7),
+        # --- LLM: Azure OpenAI ---
+        # Gemini 2.5 Flash has an intermittent empty-response bug with function tools
+        # in the livekit plugin. Azure OpenAI is more reliable for the separate pipeline.
+        llm=openai.LLM.with_azure(
+            model=os.environ["AZURE_LLM_MODEL"],
+            azure_deployment=os.environ["AZURE_LLM_DEPLOYMENT"],
+            azure_endpoint=os.environ["AZURE_LLM_ENDPOINT"],
+            api_key=os.environ["AZURE_LLM_API_KEY"],
+            api_version=os.environ["AZURE_LLM_API_VERSION"],
+            temperature=0.7,
+        ),
 
         # --- TTS: Gemini TTS (multilingual, supports Bengali) ---
         # Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr
