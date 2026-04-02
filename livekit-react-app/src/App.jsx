@@ -16,7 +16,7 @@ const SERVER_HOST = isSecure
 
 // Use WSS/HTTPS when on secure connection, WS/HTTP otherwise
 const LIVEKIT_URL = isSecure
-  ? `wss://${SERVER_HOST}/rtc`
+  ? `wss://${SERVER_HOST}`
   : `ws://${SERVER_HOST}:7880`;
 
 // Token server: use /token-server path when on domain (proxied by nginx), direct port when on IP
