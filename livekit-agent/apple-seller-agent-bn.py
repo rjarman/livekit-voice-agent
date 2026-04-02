@@ -403,8 +403,8 @@ async def entrypoint(ctx: JobContext) -> None:
     # Uses OPENAI_API_KEY env var.
     t_model = time.monotonic()
     realtime_model = openai.realtime.RealtimeModel(
-        model="gpt-4o-realtime-preview",
-        voice="ash",
+        model="gpt-realtime-mini",
+        voice="coral",
         temperature=0.7,
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
