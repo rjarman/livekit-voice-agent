@@ -196,9 +196,9 @@ async def _search_qdrant(query: str, top_k: int = TOP_K) -> list[dict[str, Any]]
     query_vector = response.data[0].embedding
 
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
-    results = client.search(
+    results = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query=query_vector,
         limit=top_k,
     )
     client.close()
@@ -210,7 +210,7 @@ async def _search_qdrant(query: str, top_k: int = TOP_K) -> list[dict[str, Any]]
             "heading": hit.payload.get("heading", ""),
             "score": hit.score,
         }
-        for hit in results
+        for hit in results.points
     ]
 
 
