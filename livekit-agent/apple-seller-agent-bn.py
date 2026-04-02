@@ -27,10 +27,10 @@ from livekit.plugins import cartesia, google, groq, openai, silero, assemblyai
 
 # ---------------------------------------------------------------------------
 # Bengali agent provider stack:
-#   Gemini Native Audio (RealtimeModel) — single model handles STT + LLM + TTS
-#   Model: gemini-live-2.5-flash-native-audio
-#   Auth:  GOOGLE_API_KEY
-#   Much lower latency than separate STT → LLM → TTS pipeline.
+#   OpenAI Realtime (RealtimeModel) — single model handles STT + LLM + TTS
+#   Model: gpt-4o-realtime-preview
+#   Auth:  OPENAI_API_KEY
+#   Lower cold start latency than Gemini Native Audio.
 # ---------------------------------------------------------------------------
 
 load_dotenv()
@@ -398,17 +398,22 @@ async def entrypoint(ctx: JobContext) -> None:
 
     disconnect_event = asyncio.Event()
 
-    # --- Gemini Native Audio: single model handles STT + LLM + TTS ---
-    # Much lower latency (~1-2s) vs separate STT→LLM→TTS pipeline (~4-6s).
-    # Uses GOOGLE_API_KEY (same key as before).
+    # --- OpenAI Realtime: single model handles STT + LLM + TTS ---
+    # Lower cold start latency than Gemini (~1-2s vs ~8s).
+    # Uses OPENAI_API_KEY env var.
     t_model = time.monotonic()
-    realtime_model = google.realtime.RealtimeModel(
-        model="gemini-2.5-flash-native-audio-preview-12-2025",
-        voice="Kore",
-        # Enable session resumption — Google caches the session for faster reconnects
-        session_resumption={"handle": None},
+    realtime_model = openai.realtime.RealtimeModel(
+        model="gpt-4o-realtime-preview",
+        voice="nova",
+        temperature=0.7,
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
+
+    # Gemini fallback (if needed):
+    # realtime_model = google.realtime.RealtimeModel(
+    #     model="gemini-2.5-flash-native-audio-preview-12-2025",
+    #     voice="Kore",
+    # )
 
     session = AgentSession(
         llm=realtime_model,
