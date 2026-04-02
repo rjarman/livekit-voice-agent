@@ -15,21 +15,27 @@ const SERVER_HOST = isSecure
   : (import.meta.env.VITE_SERVER_IP_ADDRESS || window.location.hostname);
 
 // Use WSS/HTTPS when on secure connection, WS/HTTP otherwise
-const LIVEKIT_URL = isSecure 
-  ? `wss://${SERVER_HOST}/livekit`
+const LIVEKIT_URL = isSecure
+  ? `wss://${SERVER_HOST}/rtc`
   : `ws://${SERVER_HOST}:7880`;
 
-// Token server: use /api path when on domain (proxied by Caddy), direct port when on IP
+// Token server: use /token-server path when on domain (proxied by nginx), direct port when on IP
 const TOKEN_SERVER_URL = isSecure
-  ? `${window.location.origin}/api`
+  ? `${window.location.origin}/token-server`
   : `http://${SERVER_HOST}:3001`;
 
 function App() {
   const [token, setToken] = useState('');
   const [roomName, setRoomName] = useState('');
   const [userName, setUserName] = useState('');
+  const [agentName, setAgentName] = useState('blocks-support-agent');
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
+
+  const AGENTS = [
+    { value: 'blocks-support-agent', label: 'Blocks Support' },
+    { value: 'apple-seller-agent-bn', label: 'Apple Seller (Bengali)' },
+  ];
 
   const handleJoin = useCallback(async (e) => {
     e.preventDefault();
@@ -49,6 +55,7 @@ function App() {
         body: JSON.stringify({
           roomName: roomName.trim(),
           participantName: userName.trim(),
+          agentName,
         }),
       });
 
@@ -103,6 +110,20 @@ function App() {
                 placeholder="Enter your name..."
                 disabled={isConnecting}
               />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="agentName">Agent</label>
+              <select
+                id="agentName"
+                value={agentName}
+                onChange={(e) => setAgentName(e.target.value)}
+                disabled={isConnecting}
+              >
+                {AGENTS.map((a) => (
+                  <option key={a.value} value={a.value}>{a.label}</option>
+                ))}
+              </select>
             </div>
 
             <button type="submit" className="join-button" disabled={isConnecting}>
