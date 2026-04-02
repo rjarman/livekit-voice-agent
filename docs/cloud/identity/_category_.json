@@ -1,0 +1,8 @@
+{
+  "label": "Identity",
+  "position": 8,
+  "link": {
+    "type": "generated-index",
+    "description": "Blocks Cloud follows a microservice architecture. These microservices are fully configurable, secure, and built with observability in mind."
+  }
+}

@@ -1,0 +1,100 @@
+---
+sidebar_label: January 20, 2026
+sidebar_position: 4
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.10 – Automation, AI & Observability Enhancements
+
+<Badge title="cloud" date="Janurary 20, 2026" />
+
+## Release Notes
+
+v3.7.10 introduces smarter automation with enhanced workflow nodes, improved visibility into inbound and outbound email activity, and the launch of SELISE AI for building flexible, tool-enabled chat experiences. This release also adds a document management system to Storage and includes UI refinements to improve overall usability and operational clarity.
+
+___
+
+## Workflows – New and Enhanced Nodes
+
+The Workflows service has been expanded with new capabilities to enable more flexible and event-driven automation.
+
+### New Nodes
+
+- **Email Trigger Node** Automatically trigger workflows when an email is received, allowing teams to build email-driven automations and integrations. 
+- **HTTP Node** The existing HTTP node now supports full configuration of:
+  - Request **headers**
+  - Query **parameters**
+  - Request **body**
+
+This enhancement enables richer integrations with external APIs and greater control over HTTP-based workflows. These updates make workflows more powerful, extensible, and better suited for real-world automation scenarios.
+
+
+## Email Service – Inbound & Outbound Visibility
+
+Blocks Cloud’s Email Service now supports **visibility into both inbound and outbound emails**, giving teams a complete view of email activity directly from the platform.
+
+Inbound emails can be enabled by configuring an incoming mail server (IMAP). Once configured, Blocks Cloud will receive and display incoming messages associated with your service.
+
+### Benefits
+
+* **Unified email observability** — monitor inbound and outbound emails from a single interface.
+* **Easier debugging** — quickly verify whether emails were received or sent successfully.
+* **Improved reliability** — detect misconfigurations or delivery issues early.
+* **Better operational insight** — understand email traffic patterns and system behavior.
+
+This enhancement makes email workflows more transparent and easier to manage in production environments.
+
+## SELISE AI
+
+Blocks Cloud introduces **SELISE AI**, a secure and customizable chat-based AI experience—designed for teams and enterprises that want full control over how AI is built and used.
+
+### Key Highlights
+
+- **Chat-based AI assistant**
+  A conversational agent with a familiar ChatGPT-style interface. 
+- **Built with Construct**
+  Developed using Blocks Cloud Construct, enabling seamless integration with platform services.
+- **User profile and preferences**
+  View your profile, change language settings, and personalize your experience.
+- **Chat history**
+  Access and continue previous conversations with full context.
+- **Tool integration**
+  Extend the assistant’s capabilities by adding tools from Blocks Cloud, allowing the AI to interact with APIs and services.
+- **Model flexibility**
+  Choose from a variety of available LLMs. You are not locked into a single model or vendor.
+- **Try it now**
+  Visit [selise.ai](https://selise.ai) to experience SELISE AI.
+
+SELISE AI empowers teams to build, extend, and operate AI assistants that fit their workflows—without sacrificing flexibility, security, or control.
+
+
+## Deployment
+
+If your domain is not verified then the message that was previously shown in the Overview page of your environment, will now be shown in the modal of the Configure button in the same page.
+
+
+## Storage — Now with a Document Management System (DMS)
+
+Blocks Cloud Storage now includes a built-in **Document Management System (DMS)**, providing a structured and centralized way to manage files across the platform.
+
+- **Service-based organization**
+  All files uploaded to Blocks Cloud are automatically organized into their respective service folders.
+  For example:
+  - Knowledge base files appear under the **AI** service.
+  - Language files appear under the **Localization** service.
+- **Preconfigured service folders**
+  A dedicated folder is automatically created for each Blocks Cloud service to ensure consistent organization.
+- **Default view**
+  The default folder displays **all files and folders** for quick access and easy navigation.
+- **Storage providers**
+  - **Azure** is the default storage provider.
+  - Additional providers can be configured as needed.
+- **File preview**
+  Preview supported file types directly within the platform.
+- **Bulk uploads**
+  Upload multiple files at once to save time and streamline workflows.
+
+This update brings better structure, visibility, and usability to file management across Blocks Cloud services.
+

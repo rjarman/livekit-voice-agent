@@ -1,0 +1,57 @@
+---
+sidebar_label: September 22, 2025
+sidebar_position: 1
+---
+import Badge from '@site/src/components/Badge';
+
+# v0.6.0
+<Badge title="construct" date="September 22, 2025" />
+
+## New Features & Improvements
+
+-   Upgraded the entire project from **React 18 → React 19** within the Vite framework.
+-   Updated **ShadCN** and **Radix UI** libraries for full React 19 compatibility.
+-   Added a complete **Vitest unit testing environment**.
+-   Removed **Storybook** integration from the Construct codebase.
+-   Performed a major **codebase restructuring**, including module revamp and improved modularization.
+-   Significantly reduced duplicate logic and redundant functionality.
+-   Completed extensive **bug fixes** and stability improvements across all modules.
+
+## Bug Fixes & Migration Adjustments
+
+### Critical Issues (Resolved)
+
+-   MFA OTP verification flow fixed — users are now correctly redirected to the **Verify Key** page.
+-   **Resend Key** button in the Verify OTP (SSO) flow now correctly triggers its API endpoint.
+-   **GetNotification API** now triggers properly when the notification modal is opened.
+
+### GraphQL Issues
+
+-   GraphQL modules using **create/add** endpoints fixed (backend-related issue).
+-   GraphQL create/update failures resolved for **Invoices**, **Task Manager**, and **Inventory** due to schema restrictions.
+
+### UI/UX & Layout Fixes
+
+-   Fixed unnecessary loading triggers on route changes.
+-   Replaced the unhelpful "invalid\_request" toast with a clearer error message on incorrect credentials.
+-   Added missing translation for the **invalid email** error on the Forgot Password page (staging).
+-   Improved spacing in the Forgot Password form.
+-   Removed/adjusted the sidebar separator when collapsed.
+-   Fixed inconsistent spacing in the header component.
+-   Resolved sidebar width layout issues causing horizontal scrolling.
+-   IAM detail page now properly shows the default profile image when the value is an empty string.
+-   Fixed Invoice Editor issue where removing a note/item deleted **all** items instead of the selected one.
+-   Task Manager’s “Add Task” modal now supports functional tag searching.
+-   Improved MFA setup page to clearly indicate the previously enabled MFA method.
+-   Updated border colors in dark mode to align with the design system.
+-   Fixed File Manager mobile navigation issue where child items incorrectly redirected to 404.
+-   Removed duplicate `BASE\_URL` from env and code.
+-   Fixed mobile layout issues in File Manager:
+	-   Date range filter calendar
+	-   Folder Docs modal
+	-   Grid view spacing for task items
+	-   File item hover background mismatch
+-   Adjusted Timeline card padding for mobile view.
+-   Replaced the two-month date range calendar with a **single-month version** across the portal to avoid mobile layout issues.
+-   Extension banner now only displays on the Login page with full translation support.
+-   Fixed issue where Construct did not load the default language set in the cloud.

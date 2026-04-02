@@ -17,6 +17,7 @@ COPY pyproject.toml .
 COPY voice-agent.py .
 COPY apple-seller-agent.py .
 COPY apple-seller-agent-bn.py .
+COPY blocks-support-agent.py .
 
 # Install dependencies with uv
 RUN uv sync --no-dev

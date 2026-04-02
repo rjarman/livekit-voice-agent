@@ -1,0 +1,76 @@
+---
+sidebar_label: November 20, 2025
+sidebar_position: 7
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.7 – Advanced Health Monitoring 
+<Badge title="cloud" date="November 20, 2025" />
+
+This release introduces powerful new authentication options, deeper health monitoring for deployed and managed services, and improved visibility into system uptime. v0.0.8 expands Deploy & Observe into a full monitoring suite while delivering more flexibility in identity mapping across external providers.
+
+---
+
+## Release Notes
+v3.7.7 enhances platform observability with a new Health view, configurable service monitors, and alerting options. On the Identity side, expanded social logins and JWT claim mapping streamline authentication and integration for both Blocks Cloud and Construct apps.
+
+---
+
+## Authentication
+
+### New Social Logins
+Users can now authenticate using **GitHub**, **X (Twitter)**, and **LinkedIn**.  
+These new social login providers are supported across:
+- **Blocks Cloud**  
+- **Construct projects**  
+
+This simplifies onboarding, enables broader identity federation, and reduces friction for end users.
+
+### JWT Claims Mapping
+Different identity providers expose different fields inside their issued JWT tokens.  
+With **JWT Claims Mapping**, administrators can now:
+- Map external token fields to Blocks Cloud–expected fields  
+- Align custom claims from third-party identity providers  
+- Ensure seamless authentication flows across Construct and Cloud  
+
+All mapping is done directly through the Cloud portal for consistency and ease of configuration.
+
+
+---
+
+## Deploy & Observe
+
+Modern cloud platforms rely on real-time visibility, automated health checks, and proactive alerting — and Deploy & Observe continues to evolve to meet these industry standards. With v0.0.8, Blocks Cloud introduces a comprehensive health monitoring experience that brings deeper transparency, better uptime awareness, and stronger operational control across all services.
+
+### New Features
+
+* **Health Overview Dashboard** — view uptime summaries and a 24-hour health timeline, where each bar represents one hour of service health.
+* **Hover & Click Insights** — hover to see uptime percentage and time ranges; click to open detailed monitoring options.
+* **Service Details View**
+
+  * Incident history
+  * Notification configuration (email recipients, triggers, etc.)
+  * Callback monitoring support (your service pings Blocks Cloud to confirm it’s alive)
+  * Request-based monitoring (Blocks Cloud pings your service to verify availability)
+  * Support for JSON payloads and custom headers
+  * Options to pause or delete monitors
+* **Core, Managed & Deployed Services Monitoring** — health checks now support all service types across the platform.
+* **Monitoring Setup in Deploy & Observe** — configure callback or request monitors directly from the dashboard with an improved setup flow.
+
+### Benefits
+
+* **Unified visibility** — see the state of your entire ecosystem (core services, deployed workloads, and managed services) from a single view.
+* **Proactive issue detection** — understand uptime patterns hour-by-hour and catch incidents before they scale.
+* **Fewer surprises in production** — automated health checks ensure that degraded services are flagged quickly.
+* **Flexible monitoring** — choose callback or request-based checks depending on how your service reports health.
+* **More control** — pause, delete, or reconfigure monitors without redeploying anything.
+
+
+---
+
+## Bug Fixes
+- Fixed issue where all client credential grant types were being set as inactive.
+- Resolved issue where already filled-in values were being translated when using auto-translate.  
+

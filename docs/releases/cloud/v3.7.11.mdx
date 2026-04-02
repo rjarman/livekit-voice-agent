@@ -1,0 +1,121 @@
+---
+sidebar_label: February 15, 2026
+sidebar_position: 3
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.11 – Security, Identity & Automation Enhancements Across Blocks Cloud
+
+<Badge title="cloud" date="February 15, 2026" />
+
+## Release Notes
+
+This release strengthens **Blocks Cloud** with secure Magic Links, OIDC-based SSO via Blocks IDP, enhanced Selise AI chatbot integration, improved localization change detection, AWS S3–compatible storage support, and a redesigned environment and user management experience.
+
+Together, these updates improve automation, governance, flexibility, and AI-driven workflows across the **SELISE Blocks** ecosystem.
+
+
+___
+
+
+## Utilities - Secure Redirects & Backend Action Triggers
+
+Blocks Cloud now introduces Magic Links, enabling teams to generate secure, time-limited URLs for streamlined user flows and automated backend actions.
+
+Magic Links are designed for flexibility and control, supporting configurable usage limits, expiration dates, authentication scopes, and environment-specific base URLs.
+
+### Two Types of Magic Links
+
+**Redirect Magic Links**
+Generate shortened URLs that securely redirect users to a configured destination while maintaining authentication context. Ideal for passwordless login, invitations, and guided user journeys.
+
+**Action Magic Links**
+Trigger predefined backend HTTP requests (GET or POST) when accessed. These links execute actions such as email verification, workflow triggers, or system events—without requiring user redirection.
+
+**Key Capabilities**
+
+- Configurable usage limits
+- Optional automatic expiration
+- Scoped access via client credentials
+- Support for custom headers, payloads, and query parameters (Action type)
+- Customizable short URL base configuration
+- Centralized dashboard for viewing, filtering, and managing links
+
+Magic Links provide a secure and extensible mechanism for handling authentication flows, event-driven automation, and controlled access patterns across environments.
+
+
+## Identity - OIDC
+
+### 🔐 OpenID Connect (OIDC) Support for Blocks IDP
+
+This release adds **OpenID Connect (OIDC)** support, enabling applications to use **Blocks Identity Provider (IDP)** as a standards-compliant **Single Sign-On (SSO)** solution.
+
+Applications can now integrate with Blocks IDP using the Authorization Code flow, enabling secure, standards-compliant user authentication while delegating identity management to the Blocks platform. This allows any third-party application to use Blocks IDP as its SSO provider.
+
+Blocks Construct also supports this capability—by enabling Bring Your Own SSO and implementing Blocks OIDC—allowing Construct-based deployments to participate in the same unified single sign-on experience across environments.
+
+Key benefits include:
+
+* Centralized authentication through Blocks IDP
+* Secure, industry-standard OIDC authorization flow
+* Seamless SSO availability across Blocks-based deployments
+* Reduced need for custom authentication logic in applications
+
+This enhancement strengthens identity integration within the **SELISE Blocks** ecosystem and provides a scalable foundation for SSO-enabled applications.
+
+
+## Localization
+
+A new endpoint is now available to help determine whether localization content has changed, without requiring a full language file download. This allows applications to efficiently detect when an update is necessary by checking the publication history of language resources.
+
+**New endpoint:**
+`/Key/GetLanguageFileGenerationHistory`
+Detailed specifications are available in the API documentation [Swagger](https://api.seliseblocks.com/uilm/v1/swagger/index.html).
+
+The endpoint returns versioned metadata for published language files, including creation time and project context, enabling lightweight change detection.
+
+### Newly Supported Languages
+
+* Bengali (Sylheti)
+* Bengali (Chittagonian)
+
+This update improves localization efficiency while expanding language coverage for regional variants.
+
+
+## Selise AI – Blocks Cloud Chatbot Integration
+
+**Selise AI** continues to evolve as a unified conversational interface.
+
+Previously, users could interact with multiple large language models (LLMs) within a single GPT-style experience. With this release, Selise AI now supports direct interaction with chatbots configured on **Blocks Cloud**.
+
+This enhancement allows users to connect to chatbots powered by the **Blocks RAG architecture**, leveraging:
+
+* Dedicated knowledge bases
+* Custom tunings and configurations
+* Context-aware retrieval
+* Enterprise-ready deployment controls
+
+By integrating Blocks Cloud chatbots into Selise AI, organizations can move beyond general-purpose LLM conversations and interact with domain-specific, retrieval-augmented assistants tailored to their own data and business logic.
+
+This update strengthens the bridge between conversational AI and the broader **SELISE Blocks ecosystem, enabling more intelligent, contextual, and controlled AI experiences.
+
+
+## UDS – AWS-Compatible Object Storage Support
+
+UDS (formerly **Data Gateway**) now supports **AWS S3–compatible object storage**, enabling integration with alternatives such as **MinIO**.
+
+This enhancement allows organizations to use self-hosted or third-party S3-compatible storage solutions while maintaining compatibility with existing AWS-style APIs. It provides greater flexibility in storage architecture, supports hybrid and on-prem deployments, and reduces dependency on a single cloud provider.
+
+## Blocks Cloud
+
+A new dedicated section has been introduced for navigating Environments, Project Settings, and People Management, creating a more structured and intuitive user experience.
+
+This update streamlines navigation across environments and improves visibility and control over user access. Teams can now:
+
+- Invite users to multiple environments
+- Clearly see who has access to each environment
+- View and manage user profiles
+- Manage project-level settings from a centralized location
+

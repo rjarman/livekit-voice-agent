@@ -1,0 +1,94 @@
+---
+sidebar_label: November 1, 2025
+sidebar_position: 8
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.6 – Managed Services, Smarter IAM & User Docs
+<Badge title="cloud" date="November 1, 2025" />
+
+
+This release focuses on isolation, identity, and intelligent communication. Each project and environment now has its own schema, ensuring complete data separation. The IAM module gains new authentication options, while the AI, Communication, and Managed Services sections see meaningful functional and usability updates.
+
+---
+
+## Release Notes
+v3.7.6 introduces dedicated Data Gateway instances, smarter identity management with client credential support, and context-aware AI translations. These enhancements improve security, flexibility, and collaboration across SELISE Blocks Cloud.
+
+---
+
+## Projects & Environments
+Every project and environment now has its own schema, replacing the previously shared model.  
+This provides complete isolation between environments, ensuring that project-specific data, rules, and configurations remain independent.
+
+---
+
+## IAM (Identity & Access Management)
+
+### New Features
+- **External IdP JWKS Support** — Administrators can now integrate third-party authentication providers such as Auth0, Keycloak, or any custom OpenID Connect (OIDC)–compliant service through JWKS (JSON Web Key Set) configuration. By sharing the provider’s JWKS endpoint within IAM settings, Blocks Cloud can directly verify tokens issued by these external systems.
+This enhancement allows organizations to bring their existing user base into Blocks Cloud without requiring re-registration or manual synchronization. Users authenticated through their existing IdP can seamlessly access Blocks Cloud resources while benefiting from native identity, authorization, and LMT (Logs, Metrics & Tracing) capabilities.
+In essence, teams can now unify their external authentication ecosystem with Blocks Cloud — maintaining centralized identity management externally while still gaining full observability and policy control within the platform.
+- **Client Credentials Grant** — Added support for the *Client Credentials* OAuth 2.0 flow, enabling secure, machine-to-machine authentication. This allows backend services or applications to access APIs using client ID and secret without requiring user interaction.  
+- **SSO Renaming** — The “Social” tab has been renamed to **SSO (Single Sign-On)** for clarity and alignment with industry standards.  
+
+### Improvements
+- **Tab Sequence Updated** — The sequence of authentication tabs has been restructured for a more logical setup flow.
+
+---
+
+## Data Gateway
+
+### New Features
+- **Preview Section** — Added a powerful preview interface allowing users to view endpoints for GraphQL databases, auto-generate Create/Read/Update/Delete (CRUD) queries, and inspect schema structure in JSON format.  
+- **Dedicated Instances per Project/Environment** — Each project or environment now comes with its own Data Gateway instance, ensuring dedicated GraphQL resources and complete data separation.
+
+---
+
+## AI
+
+### New Features
+- **Custom Chatbot Banner** — Organizations can now add branded banners to their chatbots. The banner appears at the top of the chatbot interface and supports image formats, allowing teams to display announcements, promotions, or visual identity elements.
+
+---
+
+## Communication
+
+### New Features
+- **Sinhala Language Added** — Sinhala is now supported as part of the translation system, expanding accessibility.  
+- **Key-Specific Context Provision** — AI translation models often produce linguistically correct results but can miss contextual nuances — especially when the same phrase or label carries different meanings depending on where it appears in the interface.
+With key-specific context provision, developers can now attach contextual metadata to each translation key. This additional layer of information helps the AI understand where and how the text is used — whether it’s part of a button, tooltip, message, or title — allowing translations to stay accurate not just in language, but also in intent and placement.
+As a result, automatic translations across the platform become more reliable, natural, and domain-aware, minimizing errors that come from one-size-fits-all translations.
+
+---
+
+## Managed Services
+
+### New Features
+- **Managed Services** — The Managed Services capability allows users to connect their own backend services with the core features of SELISE Blocks Cloud — effectively extending the platform’s observability, identity, and data capabilities into their own systems.
+In this release, users can integrate Blocks’ native Logs, Metrics & Tracing (LMT) features directly into their managed services. This enables unified monitoring, debugging, and performance analysis across both internal and Blocks-hosted components.
+Looking ahead, this integration layer will expand beyond LMT to include additional platform services — allowing teams to view their service usage, operational health, and even vulnerability scans (via SCA, SAST, and DAST) within the same dashboard.
+- **Future Enhancements** — In upcoming releases, users will also be able to view service health and scan for vulnerabilities using **SCA (Software Composition Analysis)**, **SAST (Static Application Security Testing)**, and **DAST (Dynamic Application Security Testing)** integrations — bringing proactive observability and security into one place.
+
+---
+
+## Documentation
+
+- **User Docs Site Launched** — The official documentation for SELISE Blocks Cloud is now live at [docs.seliseblocks.com/cloud](https://docs.seliseblocks.com/cloud). Explore detailed guides, configuration steps, and API references.
+
+---
+
+## Bug Fixes
+- Fixed UI responsiveness issues in the “Export Keys” section.  
+- Updated “Reload Schema” API to dynamically load projects. (#1680)  
+- Fixed chatbot scrolling issues on mobile devices. (#1497)  
+- General responsiveness improvements across modules.  
+- Fixed language data migration bug where duplicate keys were being created.  
+- Resolved issue where Test Construct users were unable to log in due to a cache problem. (#1645)  
+
+---
+
+## Summary
+SELISE Blocks Cloud v3.7.6 continues the journey toward isolation, intelligence, and integration — offering developers more control, businesses stronger identity options, and teams smarter tools for communication and observability.

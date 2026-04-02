@@ -172,6 +172,45 @@ services:
     networks:
       - backend
 
+  livekit-blocks-support-agent:
+    build:
+      context: ./livekit-agent
+      dockerfile: Dockerfile
+    image: livekit-agent:latest
+    container_name: livekit-blocks-support-agent
+    restart: unless-stopped
+    command: ["uv", "run", "python", "blocks-support-agent.py", "start"]
+    volumes:
+      - ./docs:/app/docs:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS_FILE:-./google-credentials.json}:/app/google-credentials.json:ro
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      CARTESIA_API_KEY: ${CARTESIA_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials.json
+      AZURE_LLM_ENDPOINT: ${AZURE_LLM_ENDPOINT}
+      AZURE_LLM_API_KEY: ${AZURE_LLM_API_KEY}
+      AZURE_LLM_MODEL: ${AZURE_LLM_MODEL}
+      AZURE_LLM_DEPLOYMENT: ${AZURE_LLM_DEPLOYMENT}
+      AZURE_LLM_API_VERSION: ${AZURE_LLM_API_VERSION}
+      AZURE_TTS_ENDPOINT: ${AZURE_TTS_ENDPOINT}
+      AZURE_TTS_API_KEY: ${AZURE_TTS_API_KEY}
+      AZURE_STT_ENDPOINT: ${AZURE_STT_ENDPOINT}
+      AZURE_STT_API_KEY: ${AZURE_STT_API_KEY}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      DOCS_DIR: /app/docs/cloud
+    depends_on:
+      - livekit
+      - qdrant
+    networks:
+      - backend
+
   livekit-egress:
     image: livekit/egress:latest
     container_name: livekit-egress

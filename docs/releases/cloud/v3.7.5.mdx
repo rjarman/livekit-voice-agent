@@ -1,0 +1,91 @@
+---
+sidebar_label: October 15, 2025
+sidebar_position: 9
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+
+# v3.7.5 – Smarter Recommendations, Security & Integrations
+<Badge title="cloud" date="October 15, 2025" space={16}/>
+
+This release strengthens SELISE Blocks Cloud with smarter recommendations, enhanced security controls, and deeper integrations. Users gain contextual suggestions, schema-level permission management, and flexible authentication options across the platform. Together, these improvements make the environment more adaptive, secure, and developer-friendly.
+
+---
+
+## Release Notes
+This release introduces data-driven suggestions, identity enhancements, and schema-level permissions while refining deployment and observability. Teams benefit from stronger security, streamlined workflows, and intelligent automation across SELISE Blocks Cloud.
+
+---
+
+## AI
+
+### New Features
+- **Data-Based Suggestions** — recommendation system powered by user data and behavioral signals to surface relevant actions and configurations.  
+- **Input-Based Suggestions** — real-time suggestions derived from current user input, improving task accuracy and reducing setup time.  
+- **Knowledge Base Notifications** — in-app notifications when documentation updates or relevant knowledge base articles are published.  
+- **Word Count** — live word count within Markdown fields to assist with documentation and content management.  
+
+### Improvements
+- Enhanced suggestion logic for better contextual relevance across multiple workflows.  
+- Introduced visual distinction for suggestions derived from data versus input.  
+- Optimized notification frequency and relevance to match project type and workspace activity.  
+
+---
+
+## Data Gateway
+
+### New Features
+- **Schema-Level Permission Controls** — adds support for Row Level Security (RLS) and Column Level Security (CLS) to manage data visibility with precision.  
+- Administrators can now define role-based filters and masking policies directly from Data Gateway settings.  
+
+### Improvements
+- Improved schema management UI for quicker configuration of RLS and CLS rules.  
+- Policy changes are now logged for audit tracking.  
+
+---
+
+## Deploy & Observe
+
+### New Features
+- **SCA Redirection** — users can now be redirected directly to Software Composition Analysis findings and vulnerability reports for faster issue resolution.  
+
+### Improvements
+- Updated integration flow to align with dependency management services.  
+
+---
+
+## Identity
+
+### New Features
+- **Personal Access Tokens (PATs)** — create and manage scoped tokens for secure programmatic access.  
+- **Third-Party Token Validation** — validate tokens issued by external systems for broader interoperability.  
+- **Revoke Access** — revoke issued tokens, sessions, or connected app access directly from profile settings.  
+- **OIDC Integration** — introduces OpenID Connect (OIDC) support for seamless authentication between Dependency Track and SELISE Blocks Cloud.  
+
+### Improvements
+- Improved token management interface with clearer expiration indicators.  
+- Enhanced identity synchronization and access token handling.  
+
+### Fixes
+- **MFA Issue Fix** — resolved inconsistencies in multi-factor authentication prompts that affected certain user accounts.  
+
+---
+
+## User Interface
+
+### Improvements
+- **Terms and Conditions Placement** — moved Terms and Conditions section to the bottom of relevant flows for improved readability and layout.  
+
+---
+
+## Git Integration
+
+### Fixes
+- **Git Command Reliability** — fixed issues affecting specific Git commands during repository synchronization. Operations like fetch, commit, and push now perform as expected.  
+
+---
+
+## Summary
+SELISE Blocks Cloud v3.7.5 continues the platform’s focus on adaptability, control, and security — empowering teams to build, manage, and integrate confidently within a unified cloud environment.

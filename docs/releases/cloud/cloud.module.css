@@ -1,0 +1,21 @@
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin: 16px 0;
+}
+
+.badge {
+  background: #f0f2f5;
+  color: #113D85;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.text {
+  color: #666;
+  font-weight: 400;
+}

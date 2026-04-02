@@ -1,0 +1,72 @@
+---
+sidebar_label: September 23, 2025
+sidebar_position: 10
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+
+# v3.7.4 – AI Enhancements & UILM Updates
+<Badge title="cloud" date="September 23, 2025" space={16} />
+
+This release introduces the Data Gateway service to Construct along with an early-stage integration of Storybook for component previews.
+
+---
+
+## Release Notes
+This release expands flexibility and intelligence across the platform. Users now have better control over AI Agents through customizable enhancements, user workflow tracking, and history and context retention with UILM. AI-powered Logs, Metrics & Tracing enhances environment migration starting with the UILM model. Together, these improvements make the platform more adaptable, resilient and effective for a wide range of applications.
+
+---
+
+## Environment Migration
+Our cloud platform now supports environment migration, giving users the flexibility to move data between environments. This capability minimizes workloads, simplifies testing, and reduces resource consumption when transferring projects. Support begins with the UILM language model. Migration ensures better traceability and logs for auditing. Migration support will gradually extend across additional models and services.
+
+---
+
+## UILM
+UILM now includes language history with recast capability, enabling users to track changes and restore previous versions when needed. This is especially useful for recent project introductions or errors. If you want to compare different states, or simply rewind to a prior task to enhance functionality, this major change enables safe and reversible UILM edits. Boosts safety and flexibility for your workflows.
+
+---
+
+## Bug Fixes
+- Resolved issue where API calls occurred with decoupled modules in "Create New Key".
+- Fixed non-functional reset button appended with no previous data available.
+- Corrected alignment issues within the module selection field.
+
+---
+
+## Logs & Tracing
+Our Logs, Metrics & Tracing (LMT) now has AI support, allowing users to query logs, metrics, and traces in natural language. You can even search directly by trace ID making it easier to diagnose issues and ensure integrity.
+
+### New Features
+- Added support for searching by trace ID.
+- Enhanced Ask AI, providing descriptive insights powered by AI.
+
+---
+
+## AI Agents
+AI Agents now give users more control through adjustable parameters, ensuring the assistant behaves as needed – whether that means more focused, more creative, or more efficient.
+
+### New Features
+- **Context window** – set how many past messages are remembered.
+- **Context preservation** – additional summarization and conversation tools to preserve context.
+- **Embeddings models**:
+  - Embedding v2 base: standard batch size for large models
+  - Embedding v3 small
+  - Embedding v3 large
+- **Chunking Strategy** – choose how text is split into chunks:
+  - Sentence
+  - Semantic
+  - Windowed
+  - Custom
+- **LTM Conversation** – added source links under each response to trace the origin of information.
+- **Dialog reset** – history of the conversation page has been changed.
+- The agent playground page has been redesigned.
+
+---
+
+## Improvements
+- Enhanced response quality with improved retrieval re-ranking, including semantic clustering for more accurate and relevant results.
+- Changed the trace accounts with relevant focus.
+- Introduced a more robust system based on the Conversation API instead of query-based interaction for better processing and retrieval.

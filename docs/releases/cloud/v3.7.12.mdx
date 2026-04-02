@@ -1,0 +1,187 @@
+---
+sidebar_label: February 24, 2026
+sidebar_position: 2
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.12 – Advanced Data Governance, Validation & Platform Control Enhancements
+
+<Badge title="cloud" date="February 24, 2026" />
+
+## Release Notes
+
+This release significantly strengthens **Blocks Cloud’s data governance and access control capabilities**, introducing a unified security model in Data Gateway that combines **RBAC, ABAC, Row-Level Security (RLS), and Column-Level Security (CLS)** with policy inheritance for enterprise-grade enforcement.
+
+In addition to dynamic, identity-aware data filtering, the release introduces **Data input validation using regex expressions**, ensuring structured and compliant data entry at the schema level.
+
+Further enhancements include:
+
+* A new **Localization endpoint** for retrieving specific language keys efficiently
+* **Project ownership transfer** for improved operational continuity
+* Stability improvements and critical bug fixes
+
+Together, these updates enhance data security, governance flexibility, and administrative control—while reducing application-level complexity and strengthening alignment with modern Zero Trust and multi-tenant architecture principles.
+
+___
+
+## Data Gateway – Unified Data Security & Policy Engine
+
+### Data input validation
+In the schema structure section click on the icon under the validation column to set up validation for that column (of the schema).
+
+Users can add regex expressions to their columns. This means every time they enter a value, it must pass the regex expression, only then data entry will be made. There can be only one expression per column. If validation fails a custom message can be provided. The regex setup can be set to active or inactive.
+
+
+Blocks Cloud Data Gateway now provides a comprehensive, rule-based security model that combines **Role-Based Access Control (RBAC)** and **Attribute-Based Access Control (ABAC)** to enforce fine-grained data governance at both the row and column levels.
+
+This enables organizations to define dynamic, identity-aware policies that control not only *who* can access data, but also *which records* and *which fields* are visible per request.
+
+
+### Multi-Layered Access Control Model
+
+#### 1. Role-Based Access Control (RBAC)
+
+Access to schemas, endpoints, and operations is governed by roles and permissions assigned to users. RBAC establishes baseline access boundaries at the resource level.
+
+
+#### 2. Attribute-Based Access Control (ABAC)
+
+Beyond static roles, Data Gateway supports dynamic evaluation of access rules using:
+
+* User identity attributes
+* Token claims
+* Organizational context
+* Schema fields
+* Static or derived values
+
+This allows policies to be evaluated at runtime based on contextual conditions.
+
+
+### Row-Level Security (RLS)
+
+Row-Level Security enables administrators to filter data records dynamically per user or role.
+
+Policies are defined using a rule engine that supports operators such as:
+
+* Equal / Not Equal
+* In / Not In
+* Starts With / Ends With
+* Is Null / Is Not Null
+
+Rules can reference:
+
+* Schema fields (e.g., `CreatedBy`, `OrganizationIds`, `Tags`, `Language`)
+* Authentication context (e.g., `Auth.UserId`, `Auth.OrganizationIds`)
+* Static values
+
+Rules can be combined using logical conditions (e.g., “all conditions must match”), allowing complex policy definitions.
+
+#### Example Use Cases
+
+* Users can only access records they created
+* Multi-tenant isolation based on `OrganizationIds`
+* Department-based filtering
+* Soft-deletion enforcement (`IsDeleted = false`)
+* Language-specific content visibility
+
+RLS ensures that only authorized records are returned in a query, without requiring custom filtering logic in application code.
+
+
+### Column-Level Security (CLS)
+
+In addition to row filtering, Data Gateway supports **Column-Level Security**, enabling granular control over field visibility within a schema.
+
+CLS allows administrators to:
+
+* Hide sensitive fields (e.g., financial data, internal flags, audit metadata)
+* Expose specific columns based on role or identity attributes
+* Apply rule-based conditions to determine field-level access
+* Enforce dynamic field masking strategies
+
+Column policies are evaluated at request time, ensuring that only authorized fields are included in the response payload.
+
+### Policy Inheritance & Layered Governance
+
+Column-level policies can optionally **inherit rules defined at the schema (row) level**.
+
+This inheritance model provides:
+
+* Consistency between row and column enforcement
+* Reduced duplication of policy definitions
+* Simplified administration
+* Flexible overrides when needed
+
+Administrators may:
+
+* Apply schema-level policies globally
+* Extend them at the column level
+* Override specific fields with stricter or alternative rules
+
+This layered design supports scalable governance across complex data models.
+
+
+### Architectural Benefits
+
+* Enforces **least-privilege data access**
+* Eliminates hardcoded authorization logic in backend services
+* Centralizes policy enforcement at the data layer
+* Strengthens multi-tenant isolation
+* Aligns with **Zero Trust architecture principles**
+* Supports compliance-driven field-level restrictions (e.g., GDPR-style data minimization)
+
+
+### In Summary
+
+Data Gateway now delivers a unified, enterprise-grade policy engine that combines RBAC and ABAC to enforce:
+
+* Resource-level control
+* Row-level filtering
+* Column-level visibility restrictions
+* Identity-aware runtime evaluation
+
+This provides secure, scalable, and highly granular data access control—without requiring application-level customization.
+
+___
+
+## Localization - New Endpoint
+
+A new endpoint has been introduced to allow applications to retrieve specific localization keys without downloading the entire language file.
+
+```
+curl --location 'https://api.seliseblocks.com/uilm/v1/Key/GetsByKeyNames' \
+--header 'accept: application/json' \
+--header 'x-blocks-key: <your-x-blocks-key>' \
+--header 'Authorization: <your-access-token>' \
+--header 'Content-Type: application/json' \
+--data '{
+  "keyNames": [
+    "ABOUT","ACCEPTED","ACTION"
+  ],
+  "moduleId": "<optional-module-id",
+  "projectKey": "<your-x-blocks-key>"
+}'
+```
+Check out the [swagger](https://api.seliseblocks.com/uilm/v1/swagger/index.html) for more details.
+
+---
+
+## Blocks Cloud – Ownership Transfer
+
+Blocks Cloud now supports **project ownership transfer**, allowing the current owner to securely assign ownership to another user within the project.
+
+Once ownership is transferred, the new owner assumes full administrative privileges, including the ability to:
+
+* Create and manage environments
+* Add or remove users from the project
+* Update and edit the project name
+* Perform all actions previously reserved for the original owner
+
+This feature ensures operational continuity, simplifies role transitions, and supports evolving team structures without requiring platform-level intervention.
+
+---
+
+## Bug fixes
+- Fixed Data Gateway instances were not reloading
+- Fixed Create role endpoint was getting a 403 error if the user is not project owner

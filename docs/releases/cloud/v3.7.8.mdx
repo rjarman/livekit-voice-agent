@@ -1,0 +1,122 @@
+---
+sidebar_label: December 7, 2025
+sidebar_position: 6
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.8 – AI Platform Revamp & Developer Experience Upgrade
+<Badge title="cloud" date="December 7, 2025" />
+
+v3.8.0 marks a major milestone for SELISE Blocks Cloud. This release delivers a comprehensive overhaul of the AI module, introduces powerful new data exploration tools, and improves extensibility across models, tools, and language management. Together, these updates align Blocks Cloud with modern AI platform standards and significantly elevate the developer experience.
+
+---
+
+## Release Notes
+This release modernizes how AI Agents, tools, and models are configured and used across the platform. With clearer structure, richer testing capabilities, and expanded integration options, v0.1.0 empowers teams to build, test, and scale AI-powered solutions with greater confidence and control.
+
+---
+
+## AI
+
+### Platform Revamp
+The AI module has been fully redesigned with updated terminology, clearer structure, and contextual tooltips across the platform to guide users. A new **AI Agent–centric navigation model** introduces a cleaner and more intuitive workflow for configuring intelligent assistants.
+
+### Agents
+
+#### Configuration
+- Enable configured **LLMs**, **Knowledge Bases**, and **Tools** directly from one place.
+- The **Welcome Guide** has been moved here from Integrations for better discoverability.
+- Centralized configuration makes agent setup clearer and more maintainable.
+
+#### Knowledge Base
+- Configure and manage knowledge bases directly within the AI Agent workflow.
+
+#### Retrieval Testing
+A brand-new section designed to bring transparency and confidence to retrieval-based AI systems.
+- View the **exact chunks** retrieved for a given query.
+- Tune retrieval behavior using adjustable parameters:
+  - Relevance score  
+  - Recall count  
+  - Knowledge retrieval weight  
+  - Re-ranking (optional, for improved results)
+- Define **ground truth texts** to validate expected retrieval outcomes.
+
+This makes it easier to debug, evaluate, and optimize RAG pipelines.
+
+#### Integrations
+- Integrations have been moved under the **AI Agent** submenu for better alignment with agent-centric workflows.
+
+#### Conversations
+- Continues to provide the same conversational interface users are familiar with.
+
+---
+
+### Tools
+Tools allow chatbots to securely interact with external APIs when needed.
+- Configure APIs that the chatbot can dynamically call based on user intent.
+- The chatbot intelligently decides whether to fetch data from:
+  - Knowledge Bases  
+  - Configured API tools  
+
+**Key Features**
+- Supports **Bearer**, **Basic**, **API Token**, and **OAuth 2.0** authentication.
+- Define expected **input and output schemas** for API endpoints.
+- Built-in **debugging section** to test APIs directly from the Blocks portal.
+- Define the **role and purpose** of each tool for collaborators via the Tutorial Guide.
+
+#### MCP Server Support
+- Configure **MCP (Model Context Protocol) servers** for use by AI agents.
+- This allows chatbots to securely access standardized external capabilities, expanding what agents can do without tightly coupling logic into prompts or code.
+
+---
+
+### Models
+Blocks Cloud now supports flexible model onboarding, allowing teams to bring the models they already use into the platform.
+
+**Supported Model Types**
+- **Official APIs** — e.g., OpenAI, Anthropic.
+- **Open Deployments** — including:
+  - Azure-hosted models  
+  - OpenRouter models  
+  - Custom models via external APIs (Bring Your Own Model)
+
+This decouples model choice from platform capabilities and enables future-proof AI development.
+
+---
+
+## Data Connect
+
+### Data Playground
+A new **Data Playground** allows users to test and explore schemas without leaving Blocks Cloud.
+- Two-panel layout:
+  - One panel for editing queries
+  - One panel for viewing execution results
+
+**Key Features**
+- Intelligent suggestions based on existing schemas.
+- **One-click data cleanup** to remove unwanted data created during schema experimentation.
+- Support for **multiple queries** in a single view, each executable independently.
+
+---
+
+## Language
+
+### Improvements
+- The **localization repository** has been made public.
+- Language keys containing dots (`.`) are now treated as **single keys**, instead of being automatically split into nested structures.
+  - This restores expected behavior and prevents key-breaking issues.
+
+---
+
+## Bug Fixes
+- Fixed Playground chatbot send button not working.
+- Fixed duplicated keys during migration.
+- Resolved language issues when downloading exported files.
+- Updated language label from **Bhutani** to **Dzongkha**.
+
+---
+
+## Summary
+SELISE Blocks Cloud v3.7.8 represents a significant step forward — redefining how AI agents, tools, and models are built and tested, while strengthening data exploration and localization workflows. This release lays a strong foundation for scalable, transparent, and extensible AI systems.

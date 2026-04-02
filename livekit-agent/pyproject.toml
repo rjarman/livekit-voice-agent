@@ -13,6 +13,8 @@ dependencies = [
     "livekit-plugins-cartesia>=0.4.0",
     "livekit-plugins-google>=0.1.0",
     "python-dotenv>=1.0.0",
+    "qdrant-client>=1.9.0",
+    "openai>=1.30.0",
 ]
 
 [dependency-groups]

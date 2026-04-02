@@ -1,0 +1,164 @@
+---
+sidebar_label: March 15, 2026
+sidebar_position: 1
+
+---
+
+import Badge from '@site/src/components/Badge';
+
+# v3.7.12 – AI Enhancements, Data Insights & Project Governance
+
+<Badge title="cloud" date="March 15, 2026" />
+
+## Release notes
+
+This release enhances **Blocks Cloud** with improvements across AI, Selise AI, Data Gateway, and project management. Key highlights include a more flexible knowledge base structure, the introduction of reasoning agents, richer note-taking and file interaction capabilities in Selise AI, and improved ownership controls at the project level. Together, these updates improve usability, flexibility, and control across the platform.
+
+---
+
+## AI 
+
+### Knowledge Base Folders
+
+The Knowledge Base is now available as a **dedicated section within the AI module**, at the same level as Agents. Previously, knowledge bases were tightly coupled with individual agents and had to be configured within the agent setup.
+
+With this update:
+
+- Knowledge bases can now be **organized into folders**
+- Each folder can be assigned to **one or multiple agents**
+- Agents can consume **multiple knowledge base folders simultaneously**
+- Each folder supports its own:
+  - **Embedding model**
+  - **Chunking strategy**
+
+This separation improves reusability, modularity, and management of knowledge resources across different agents and use cases.
+
+---
+
+### Reasoning Agents
+
+A new **Reasoning Agent mode** has been introduced for handling complex, multi-step tasks.
+
+Reasoning agents:
+
+- Break down user queries into **multiple steps**
+- Evaluate the output of each step before proceeding
+- Iteratively refine responses until a final result is achieved
+
+This mode is ideal for **complex workflows, decision-making tasks, and multi-step problem solving**, though it may consume more AI credits due to its iterative nature.
+
+---
+
+## Selise AI
+
+### Notes
+
+Selise AI now includes a **Notes feature** within its GPT-style interface, enabling users to create, manage, and interact with structured content directly inside the platform.
+
+Key capabilities include:
+
+- Create and manage notes with **Markdown support**
+- Switch between **edit and read modes**
+- **Search** across existing notes
+- Use **undo/redo** for editing
+- Enhance content using **AI-assisted improvements**
+- Interact with a chatbot to discuss or refine notes
+- Export notes in multiple formats:
+  - `.txt`
+  - `.md`
+  - `.pdf`
+
+This feature transforms Selise AI into a powerful workspace for both content creation and AI-assisted knowledge management.
+
+---
+
+### File Upload
+
+Selise AI now supports **file uploads**, enabling users to interact with documents directly within the chat interface.
+
+Users can:
+
+- Upload files and reference them in conversations  
+- Ask questions based on file content  
+- Use AI to analyze, summarize, or extract information  
+
+This brings Selise AI closer to a full-featured, ChatGPT-like experience with enhanced context handling.
+
+---
+
+## Data Gateway
+
+### Data Visualization
+
+Data Gateway now provides enhanced **data visualization capabilities**, allowing users to easily view, filter, and interact with schema data directly within the platform.
+
+#### Viewing Data
+
+Users can visualize data by navigating to a schema and switching to the **Data tab**. Data can be viewed in multiple formats:
+
+- **Table View** — Structured tabular format with per-cell copy support  
+- **JSON View** — Raw JSON representation of the data  
+- **Data Details View** — Expanded view showing complete record-level information  
+
+Each data entry includes quick copy options for improved usability.
+
+#### Filtering & Sorting
+
+The data view supports flexible filtering and sorting options:
+
+- **Filter by Condition**
+  - Apply one or more conditions
+  - Combine conditions using **AND / OR** logic  
+- **Filter by Column**
+  - Select specific columns to display  
+- **Sorting**
+  - Sort data by any field in ascending or descending order  
+
+These capabilities allow users to efficiently explore and analyze data without leaving the platform.
+
+---
+
+## Project Settings 
+
+**Ownership Transfer**
+
+Blocks Cloud now supports **project ownership transfer**, allowing the current owner to assign ownership to another user.
+
+Once ownership is transferred, the new owner gains full administrative control, including the ability to:
+
+- Add or remove users from the project  
+- Manage user access across environments  
+- Create and manage environments  
+- Update the project name  
+
+This feature ensures continuity, simplifies team transitions, and improves project governance.
+
+---
+
+## Construct Cli
+
+The Construct CLI has been updated with the following improvements:
+
+- Added **environment-based prefixes** to `VITE_X_BLOCKS_KEY` and `VITE_PROJECT_SLUG` for better configuration management  
+- Refactored CLI setup instructions for improved clarity  
+- Removed unnecessary `.github` folder from generated projects  
+- Updated the Construct repository reference  
+
+To use the latest version:
+
+```
+
+npm uninstall -g @seliseblocks/cli
+npm install -g @seliseblocks/cli
+
+```
+
+---
+
+## Bug Fixes
+
+- Fixed issue where creating roles returned a **403 error** for non-project owners  
+- Resolved issues with **Gemini and Sonnet models** in Selise AI chat  
+- Fixed Data Gateway pod reload issues  
+```
+
