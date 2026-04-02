@@ -403,7 +403,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # Uses OPENAI_API_KEY env var.
     t_model = time.monotonic()
     realtime_model = openai.realtime.RealtimeModel(
-        model="gpt-realtime",
+        model="gpt-realtime-1.5",
         voice="coral",
         temperature=0.7,
     )
