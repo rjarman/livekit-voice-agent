@@ -405,6 +405,8 @@ async def entrypoint(ctx: JobContext) -> None:
     realtime_model = google.realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-preview-12-2025",
         voice="Kore",
+        # Enable session resumption — Google caches the session for faster reconnects
+        session_resumption={"handle": None},
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
@@ -419,13 +421,6 @@ async def entrypoint(ctx: JobContext) -> None:
         room=ctx.room,
     )
     logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
-
-    # Warmup: force WebSocket connection, then greet
-    t_warmup = time.monotonic()
-    await session.generate_reply(
-        instructions="Do not say anything. Stay completely silent."
-    )
-    logger.info("[TIMING] RealtimeModel warmup — %.2fs", time.monotonic() - t_warmup)
 
     t_greet = time.monotonic()
     await session.generate_reply(
