@@ -404,7 +404,7 @@ async def entrypoint(ctx: JobContext) -> None:
     t_model = time.monotonic()
     realtime_model = openai.realtime.RealtimeModel(
         model="gpt-4o-realtime-preview",
-        voice="nova",
+        voice="ash",
         temperature=0.7,
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
