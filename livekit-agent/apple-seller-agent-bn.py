@@ -408,8 +408,11 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
+    # Use Cartesia TTS for instant greeting — avoids 8s RealtimeModel cold start.
+    # RealtimeModel WebSocket connects lazily when the user first speaks.
     session = AgentSession(
         llm=realtime_model,
+        tts=cartesia.TTS(),
         vad=ctx.proc.userdata["vad"],
     )
 
@@ -420,11 +423,21 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
 
+    # Fire greeting (Cartesia TTS, fast) and RealtimeModel warmup in parallel.
+    # generate_reply forces the WebSocket to connect so it's ready when user speaks.
     t_greet = time.monotonic()
-    await session.generate_reply(
-        instructions="Greet the customer warmly in Bengali. Say Assalamu Alaikum, introduce yourself as Apple sales assistant, and ask what they are looking for. Keep it to 2 short sentences."
-    )
-    logger.info("[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)", time.monotonic() - t_greet, time.monotonic() - t_start)
+
+    async def _warmup_realtime() -> None:
+        t = time.monotonic()
+        await session.generate_reply(
+            instructions="Do not say anything. Stay silent. Wait for the customer to speak."
+        )
+        logger.info("[TIMING] RealtimeModel warmup — %.2fs", time.monotonic() - t)
+
+    warmup_task = asyncio.create_task(_warmup_realtime())
+    await session.say("Assalamu Alaikum! Ami apnar Apple sales assistant. Apni ki khujchhen?")
+    logger.info("[TIMING] greeting say — %.2fs (total from start: %.2fs)", time.monotonic() - t_greet, time.monotonic() - t_start)
+    # Don't await warmup — let it finish in background while user listens
 
     async def on_shutdown() -> None:
         disconnect_event.set()
