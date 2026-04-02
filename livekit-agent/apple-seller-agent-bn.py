@@ -7,6 +7,7 @@ Same functionality as the English agent, but all spoken conversation is in Benga
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 
 import aiohttp
@@ -215,8 +216,13 @@ Always say goodbye BEFORE ending so the customer hears it."""
             Product list. Present these to the customer in natural Bengali speech. Never read out order codes.
         """
 
+        t0 = time.monotonic()
+        logger.info("[TIMING] get_apple_prices START — category=%r search_term=%r", category, search_term)
+
         if N8N_PRICES_WEBHOOK_URL:
+            t_webhook = time.monotonic()
             products = await _fetch_prices_from_webhook()
+            logger.info("[TIMING] webhook fetch took %.2fs — %d products", time.monotonic() - t_webhook, len(products))
         else:
             products = []
 
@@ -275,12 +281,14 @@ Always say goodbye BEFORE ending so the customer hears it."""
             line += f" [order code: {p.get('id', '')}]"
             lines.append(line)
 
-        return (
+        result = (
             f"{len(products)} product(s) found:\n"
             + "\n".join(lines)
             + "\n\nIMPORTANT: Only mention 2-3 products in ONE or TWO short Bengali sentences. "
             "Ask if they want to hear more. Never read order codes aloud."
         )
+        logger.info("[TIMING] get_apple_prices END — total %.2fs, returning %d products", time.monotonic() - t0, len(products))
+        return result
 
     @function_tool()
     async def trigger_purchase(
@@ -298,8 +306,9 @@ Always say goodbye BEFORE ending so the customer hears it."""
         Returns:
             Result message. Relay to the customer in natural Bengali.
         """
+        t0 = time.monotonic()
         logger.info(
-            "trigger_purchase (bn) CALLED — product_id=%s, quantity=%d, user_name=%s",
+            "[TIMING] trigger_purchase START — product_id=%s, quantity=%d, user_name=%s",
             product_id,
             quantity,
             user_name,
@@ -336,17 +345,20 @@ Always say goodbye BEFORE ending so the customer hears it."""
         if product_name is None:
             product_name = product_id
 
+        t_purchase = time.monotonic()
         result = await _trigger_n8n_purchase(product_id, product_name, quantity, user_name)
+        logger.info("[TIMING] n8n purchase webhook took %.2fs", time.monotonic() - t_purchase)
 
         if result.get("success"):
             qty_label = f"{quantity}" if quantity > 1 else "1"
+            logger.info("[TIMING] trigger_purchase END (success) — total %.2fs", time.monotonic() - t0)
             return (
                 f"Order successful! Customer {user_name.strip()} ordered {qty_label} x {product_name}. "
                 f"Confirm this to the customer in a warm, friendly Bengali sentence. "
                 f"Then say goodbye in Bengali and end the call."
             )
         error = result.get("error", "unknown issue")
-        logger.error("Purchase failed (bn) for %s: %s", product_id, error)
+        logger.error("[TIMING] trigger_purchase END (failed) — total %.2fs, error: %s", time.monotonic() - t0, error)
         return (
             "The order failed due to a technical issue. "
             "Apologize to the customer in Bengali and ask them to try again shortly."
@@ -362,7 +374,7 @@ Always say goodbye BEFORE ending so the customer hears it."""
         Args:
             reason: Brief reason (e.g. 'purchase complete', 'customer not interested').
         """
-        logger.info("Bengali agent ending call — reason: %s", reason)
+        logger.info("[TIMING] end_call — reason: %s", reason)
 
         async def _delayed_disconnect() -> None:
             await asyncio.sleep(self.END_CALL_DELAY)
@@ -378,36 +390,41 @@ def prewarm(proc: JobProcess) -> None:
 
 async def entrypoint(ctx: JobContext) -> None:
     room_name = ctx.room.name
-    logger.info("Apple seller Bengali agent connecting to room: %s", room_name)
+    t_start = time.monotonic()
+    logger.info("[TIMING] entrypoint START — room: %s", room_name)
 
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
-    logger.info("Apple seller Bengali agent connected to room: %s", room_name)
+    logger.info("[TIMING] connected to room — %.2fs", time.monotonic() - t_start)
 
     disconnect_event = asyncio.Event()
 
     # --- Gemini Native Audio: single model handles STT + LLM + TTS ---
     # Much lower latency (~1-2s) vs separate STT→LLM→TTS pipeline (~4-6s).
     # Uses GOOGLE_API_KEY (same key as before).
+    t_model = time.monotonic()
     realtime_model = google.realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-preview-12-2025",
         voice="Kore",
     )
+    logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
     session = AgentSession(
         llm=realtime_model,
         vad=ctx.proc.userdata["vad"],
     )
 
+    t_session = time.monotonic()
     await session.start(
         agent=AppleSellerAgentBn(disconnect_event=disconnect_event),
         room=ctx.room,
     )
+    logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
 
-    logger.info("Apple seller Bengali session started in room: %s", room_name)
+    t_greet = time.monotonic()
     await session.generate_reply(
         instructions="Greet the customer warmly in Bengali. Say Assalamu Alaikum, introduce yourself as Apple sales assistant, and ask what they are looking for. Keep it to 2 short sentences."
     )
-    logger.info("Bengali greeting sent, session running...")
+    logger.info("[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)", time.monotonic() - t_greet, time.monotonic() - t_start)
 
     async def on_shutdown() -> None:
         disconnect_event.set()
