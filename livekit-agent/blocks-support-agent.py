@@ -368,13 +368,11 @@ async def entrypoint(ctx: JobContext) -> None:
     t_greet = time.monotonic()
     await session.generate_reply(
         instructions=(
-            "Greet the customer in Bengali first, then English. "
-            "Introduce yourself as a Blocks Cloud support assistant. "
-            "Ask which language they prefer: Bengali or English. "
-            "Keep it short — 3 sentences max. "
-            "Example: 'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
+            "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
+            "Say exactly this greeting in Bengali first: "
+            "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
             "Apni ki Banglay shahajjo chan naki English e?' "
-            "Then in English: 'Welcome! I am your Blocks Cloud support assistant. "
+            "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
             "Would you prefer Bengali or English?'"
         )
     )
