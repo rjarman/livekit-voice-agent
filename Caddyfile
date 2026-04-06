@@ -1,4 +1,4 @@
-voice-agent.ddns.net {
+voice-selise.duckdns.org {
     handle /api/* {
         uri strip_prefix /api
         reverse_proxy livekit-token-server:3001
