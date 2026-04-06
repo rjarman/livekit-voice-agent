@@ -1,11 +1,10 @@
 voice-selise.duckdns.org {
-    handle /api/* {
-        uri strip_prefix /api
+    handle /token-server/* {
+        uri strip_prefix /token-server
         reverse_proxy livekit-token-server:3001
     }
 
-    handle /livekit/* {
-        uri strip_prefix /livekit
+    handle /rtc* {
         reverse_proxy livekit:7880
     }
 
