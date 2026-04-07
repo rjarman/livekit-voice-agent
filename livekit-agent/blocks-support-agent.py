@@ -3,6 +3,8 @@ Blocks Cloud Support Voice Agent for LiveKit.
 
 RAG-enabled voice agent that answers questions about Blocks Cloud documentation.
 Uses OpenAI RealtimeModel for low-latency voice + Qdrant for vector search.
+Supports human handoff via SIP call — agent goes silent during human conversation,
+resumes when the human support agent hangs up.
 """
 
 import asyncio
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from livekit import api as lkapi
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -42,13 +45,21 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 DOCS_DIR = os.getenv("DOCS_DIR", "/app/docs/cloud")
 TOP_K = 3
 
+# Human handoff config
+SUPPORT_PHONE_NUMBER = os.getenv("SUPPORT_PHONE_NUMBER", "")
+SUPPORT_SIP_TRUNK_ID = os.getenv("SUPPORT_SIP_TRUNK_ID", "")
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://livekit:7880")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+
+HUMAN_SUPPORT_IDENTITY_PREFIX = "support-human-"
+
 # ---------------------------------------------------------------------------
 # Chunking: split markdown by ## headings
 # ---------------------------------------------------------------------------
 
 def _chunk_markdown(text: str, file_path: str) -> list[dict[str, str]]:
     """Split markdown into chunks by ## headings. Files < 100 lines kept whole."""
-    # Strip frontmatter
     text = re.sub(r"^---\n.*?\n---\n", "", text, count=1, flags=re.DOTALL)
     text = text.strip()
     if not text:
@@ -57,7 +68,6 @@ def _chunk_markdown(text: str, file_path: str) -> list[dict[str, str]]:
     lines = text.split("\n")
     rel_path = file_path.split("docs/cloud/")[-1] if "docs/cloud/" in file_path else file_path
 
-    # Small files: keep whole
     if len(lines) < 100:
         return [{"text": text, "source": rel_path, "heading": ""}]
 
@@ -67,7 +77,6 @@ def _chunk_markdown(text: str, file_path: str) -> list[dict[str, str]]:
 
     for line in lines:
         if re.match(r"^#{1,2}\s+", line):
-            # Save previous chunk
             if current_lines:
                 chunk_text = "\n".join(current_lines).strip()
                 if chunk_text:
@@ -81,7 +90,6 @@ def _chunk_markdown(text: str, file_path: str) -> list[dict[str, str]]:
         else:
             current_lines.append(line)
 
-    # Last chunk
     if current_lines:
         chunk_text = "\n".join(current_lines).strip()
         if chunk_text:
@@ -127,7 +135,6 @@ async def _ensure_qdrant_indexed() -> None:
     t0 = time.monotonic()
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
 
-    # Check if collection already exists
     collections = [c.name for c in client.get_collections().collections]
     if COLLECTION_NAME in collections:
         count = client.get_collection(COLLECTION_NAME).points_count
@@ -138,19 +145,16 @@ async def _ensure_qdrant_indexed() -> None:
         client.close()
         return
 
-    # Load and chunk docs
     chunks = _load_all_chunks(DOCS_DIR)
     if not chunks:
         logger.warning("No chunks to index — docs directory may be empty")
         client.close()
         return
 
-    # Embed all chunks
     t_embed = time.monotonic()
     oai_client = oai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     texts = [c["text"] for c in chunks]
 
-    # Batch embeddings (API allows up to 2048 inputs)
     response = oai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
     embeddings = [item.embedding for item in response.data]
     dim = len(embeddings[0])
@@ -159,7 +163,6 @@ async def _ensure_qdrant_indexed() -> None:
         len(chunks), dim, time.monotonic() - t_embed,
     )
 
-    # Create collection and upsert
     t_store = time.monotonic()
     client.create_collection(
         collection_name=COLLECTION_NAME,
@@ -219,12 +222,15 @@ async def _search_qdrant(query: str, top_k: int = TOP_K) -> list[dict[str, Any]]
 # ---------------------------------------------------------------------------
 
 class BlocksSupportAgent(Agent):
-    """Voice agent that answers Blocks Cloud questions using RAG."""
+    """Voice agent that answers Blocks Cloud questions using RAG and human handoff."""
 
     END_CALL_DELAY = 2.0
 
-    def __init__(self, disconnect_event: asyncio.Event) -> None:
+    def __init__(self, disconnect_event: asyncio.Event, room: Any) -> None:
         self._disconnect_event = disconnect_event
+        self._room = room
+        self._handoff_active = False
+        self._last_topic = ""
         super().__init__(
             instructions="""\
 You are a Blocks Cloud support agent on a voice call.
@@ -242,12 +248,15 @@ BEHAVIOR RULES:
 2. When the customer asks a question, you MUST call the search_docs tool first to find relevant documentation. \
 Never answer from memory — always search first.
 3. Keep answers short and conversational — this is a voice call, not a chat. Maximum 2-3 sentences per reply.
-4. If the search returns no relevant results, say you don't have information on that topic and suggest \
-they check the Blocks Cloud documentation at docs.seliseblocks.com.
+4. If the search returns no relevant results, say you don't have information on that topic and \
+offer to transfer them to a human support agent by calling the transfer_to_human tool.
 5. NEVER read out URLs, file paths, code blocks, or markdown formatting. Describe things in plain spoken language.
 6. No emoji, no asterisks, no bullet points. Plain spoken sentences only.
 7. NEVER spell out numbers as digits. Always say them as words.
-8. After helping, ask if they have more questions. If they say no or want to end, say goodbye and end the call."""
+8. After helping, ask if they have more questions. If they say no or want to end, say goodbye and end the call.
+9. HUMAN HANDOFF: If the customer asks to speak with a human, says they want a real person, or you cannot \
+answer their question after searching, offer to transfer them to a human support agent. \
+If they confirm, call the transfer_to_human tool with a brief summary of the issue."""
         )
 
     @function_tool()
@@ -264,6 +273,7 @@ they check the Blocks Cloud documentation at docs.seliseblocks.com.
         """
         t0 = time.monotonic()
         logger.info("[TIMING] search_docs START — query=%r", query)
+        self._last_topic = query
 
         try:
             results = await _search_qdrant(query, top_k=TOP_K)
@@ -279,11 +289,10 @@ they check the Blocks Cloud documentation at docs.seliseblocks.com.
         if not results or results[0]["score"] < 0.3:
             return (
                 "No relevant documentation found for this query. "
-                "Tell the customer you don't have specific information on this topic, "
-                "and suggest they check docs.seliseblocks.com for more details."
+                "Tell the customer you don't have specific information on this topic. "
+                "Ask if they would like to be transferred to a human support agent who can help further."
             )
 
-        # Build context from top results
         context_parts = []
         for r in results:
             source = r["source"]
@@ -302,6 +311,147 @@ they check the Blocks Cloud documentation at docs.seliseblocks.com.
             "Do NOT read out file paths, URLs, or markdown formatting. "
             "Speak naturally in the customer's chosen language."
         )
+
+    @function_tool()
+    async def transfer_to_human(
+        self,
+        context: RunContext,
+        issue_summary: str = "",
+    ) -> str:
+        """Transfer the customer to a human support agent via phone call. Call this when:
+        - The customer explicitly asks to speak with a human or real person.
+        - You cannot find relevant documentation to answer their question.
+        - The customer is frustrated or needs specialized help.
+        The human support agent will join the same call. You will go silent during their conversation
+        and resume when the human hangs up.
+        Args:
+            issue_summary: A brief 1-sentence summary of what the customer needs help with.
+        """
+        if not SUPPORT_PHONE_NUMBER or not SUPPORT_SIP_TRUNK_ID:
+            logger.warning("Human handoff not configured — SUPPORT_PHONE_NUMBER or SUPPORT_SIP_TRUNK_ID missing")
+            return (
+                "Human support transfer is not available right now. "
+                "Apologize and suggest the customer contact support at support@seliseblocks.com "
+                "or visit docs.seliseblocks.com for help."
+            )
+
+        if self._handoff_active:
+            return "A human agent is already being connected. Please wait."
+
+        summary = issue_summary or self._last_topic or "general support inquiry"
+        logger.info("[HANDOFF] Starting transfer — summary: %s", summary)
+
+        self._handoff_active = True
+
+        # Place SIP call to human support in the background
+        asyncio.create_task(self._connect_human_support(context, summary))
+
+        return (
+            "Tell the customer that you are connecting them with a human support agent now. "
+            "Ask them to please wait a moment. "
+            "After saying this, DO NOT speak again until told to resume. Stay completely silent."
+        )
+
+    async def _connect_human_support(self, context: RunContext, summary: str) -> None:
+        """Place SIP call to the human support number and manage the handoff lifecycle."""
+        room_name = self._room.name
+
+        try:
+            lk_url = LIVEKIT_URL.replace("ws://", "http://").replace("wss://", "https://")
+            async with lkapi.LiveKitAPI(
+                url=lk_url,
+                api_key=LIVEKIT_API_KEY,
+                api_secret=LIVEKIT_API_SECRET,
+            ) as lk:
+                participant_identity = f"{HUMAN_SUPPORT_IDENTITY_PREFIX}{int(time.time())}"
+
+                logger.info(
+                    "[HANDOFF] Calling support: %s via trunk %s into room %s",
+                    SUPPORT_PHONE_NUMBER, SUPPORT_SIP_TRUNK_ID, room_name,
+                )
+
+                await lk.sip.create_sip_participant(
+                    lkapi.CreateSIPParticipantRequest(
+                        sip_trunk_id=SUPPORT_SIP_TRUNK_ID,
+                        sip_call_to=SUPPORT_PHONE_NUMBER,
+                        room_name=room_name,
+                        participant_identity=participant_identity,
+                        participant_name="Human Support Agent",
+                        play_dialtone=True,
+                    )
+                )
+
+                logger.info("[HANDOFF] SIP call placed, waiting for human to join...")
+
+                # Brief the human agent about the issue
+                await asyncio.sleep(3)
+                session = context.session
+                await session.generate_reply(
+                    instructions=(
+                        f"A human support agent has joined. Say this brief summary to them: "
+                        f"'The customer needs help with: {summary}'. "
+                        f"After saying the summary, go COMPLETELY SILENT. "
+                        f"Do not speak, do not respond to anything. "
+                        f"Wait until you are told to resume."
+                    )
+                )
+
+                logger.info("[HANDOFF] Agent briefed human, now going silent")
+
+                # Wait for the human support participant to disconnect
+                human_left = asyncio.Event()
+
+                def _on_participant_disconnected(participant: Any) -> None:
+                    if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
+                        logger.info(
+                            "[HANDOFF] Human support agent disconnected: %s",
+                            participant.identity,
+                        )
+                        human_left.set()
+
+                self._room.on("participant_disconnected", _on_participant_disconnected)
+
+                # Also check if the human is already gone (race condition)
+                human_in_room = any(
+                    p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
+                    for p in self._room.remote_participants.values()
+                )
+                if not human_in_room:
+                    # Human might not have joined yet — wait up to 60s
+                    for _ in range(60):
+                        await asyncio.sleep(1)
+                        human_in_room = any(
+                            p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
+                            for p in self._room.remote_participants.values()
+                        )
+                        if human_in_room:
+                            break
+
+                if human_in_room:
+                    logger.info("[HANDOFF] Human agent is in the room, waiting for them to leave...")
+                    await human_left.wait()
+                else:
+                    logger.warning("[HANDOFF] Human agent never joined, resuming after timeout")
+
+        except Exception as e:
+            logger.error("[HANDOFF] Failed to connect human support: %s", e)
+
+        # Human left or failed — resume the AI agent
+        self._handoff_active = False
+        logger.info("[HANDOFF] Resuming AI agent")
+
+        try:
+            session = context.session
+            await session.generate_reply(
+                instructions=(
+                    "The human support agent has left the call. "
+                    "You can speak again now. "
+                    "Ask the customer: 'Is there anything else I can help you with?' "
+                    "in their preferred language. Be warm and friendly."
+                )
+            )
+        except Exception as e:
+            logger.error("[HANDOFF] Failed to resume agent: %s", e)
 
     @function_tool()
     async def end_call(
@@ -360,7 +510,10 @@ async def entrypoint(ctx: JobContext) -> None:
 
     t_session = time.monotonic()
     await session.start(
-        agent=BlocksSupportAgent(disconnect_event=disconnect_event),
+        agent=BlocksSupportAgent(
+            disconnect_event=disconnect_event,
+            room=ctx.room,
+        ),
         room=ctx.room,
     )
     logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
