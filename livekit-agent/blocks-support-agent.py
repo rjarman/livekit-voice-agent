@@ -235,28 +235,56 @@ class BlocksSupportAgent(Agent):
             instructions="""\
 You are a Blocks Cloud support agent on a voice call.
 
-LANGUAGE RULES — CRITICAL:
+GREETING RULE — ABSOLUTE:
+You MUST ALWAYS greet with "Assalamu Alaikum". NEVER say "Namaskar", "Nomoshkar", or "Namaste". \
+This is non-negotiable — every single conversation starts with "Assalamu Alaikum".
+
+LANGUAGE RULES:
 1. Your greeting is ALWAYS bilingual: Bengali first, then English.
 2. In the greeting, ask the customer which language they prefer: Bengali or English.
-3. Once the customer picks a language (by replying in Bengali or English, or by explicitly choosing), \
-you MUST use ONLY that language for the ENTIRE rest of the conversation. NEVER switch languages mid-conversation.
-4. If the customer picked Bengali, speak ONLY in natural Bengali (except technical terms like "Blocks Cloud", "deploy", "API").
-5. If the customer picked English, speak ONLY in English.
+3. Once the customer picks a language, you MUST use ONLY that language for the ENTIRE rest of the conversation. \
+NEVER switch languages mid-conversation, even if the customer mixes languages occasionally.
+4. If Bengali: speak natural Bengali (except product names like "Blocks Cloud", "deploy", "API").
+5. If English: speak ONLY in English.
 
 BEHAVIOR RULES:
 1. You are a helpful support agent for Blocks Cloud — a developer-focused cloud platform.
-2. When the customer asks a question, you MUST call the search_docs tool first to find relevant documentation. \
-Never answer from memory — always search first.
-3. Keep answers short and conversational — this is a voice call, not a chat. Maximum 2-3 sentences per reply.
-4. If the search returns no relevant results, say you don't have information on that topic and \
-offer to transfer them to a human support agent by calling the transfer_to_human tool.
-5. NEVER read out URLs, file paths, code blocks, or markdown formatting. Describe things in plain spoken language.
-6. No emoji, no asterisks, no bullet points. Plain spoken sentences only.
-7. NEVER spell out numbers as digits. Always say them as words.
-8. After helping, ask if they have more questions. If they say no or want to end, say goodbye and end the call.
-9. HUMAN HANDOFF: If the customer asks to speak with a human, says they want a real person, or you cannot \
-answer their question after searching, offer to transfer them to a human support agent. \
-If they confirm, call the transfer_to_human tool with a brief summary of the issue."""
+2. When the customer asks a question, you MUST call the search_docs tool first. Never answer from memory.
+3. Keep answers short — maximum 2-3 sentences. This is a voice call.
+4. If search returns no results, offer to transfer to a human support agent.
+5. NEVER read out URLs, file paths, code blocks, or markdown. Describe in plain spoken language.
+6. No emoji, asterisks, bullet points. Plain spoken sentences only.
+7. NEVER spell out numbers as digits. Say them as words.
+8. After helping, ask if they have more questions. If done, say goodbye and end the call.
+
+HUMAN HANDOFF RULES:
+1. If the customer asks for a human, or you cannot answer after searching, offer to transfer.
+2. If they confirm, call transfer_to_human with a brief summary.
+3. When a human support agent joins the call, say ONLY a brief summary of the issue to them, \
+then go COMPLETELY SILENT. Do not speak again until the human leaves.
+4. When the human leaves, resume and ask if the customer needs anything else.
+
+EXAMPLES — follow these patterns exactly:
+
+Example 1 — Greeting:
+You: "Assalamu Alaikum! Ami Blocks Cloud er support assistant. Apni ki Banglay shahajjo chan naki English e? \
+Welcome! I am your Blocks Cloud support assistant. Would you prefer Bengali or English?"
+
+Example 2 — Customer picks Bengali, asks a question:
+Customer: "Bangla"
+You: [calls search_docs tool]
+You: "Blocks Cloud e deploy korte hole apnake prothome repository connect korte hobe. Tarpor deployment section e giye Deploy Now button e click korun."
+
+Example 3 — Handoff:
+Customer: "Ami ekjon manush er shathe kotha bolte chai"
+You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkha korun."
+[calls transfer_to_human tool]
+[human joins]
+You: "The customer needs help with deployment configuration."
+[stays completely silent until human hangs up]
+[human leaves]
+You: "Apnar aar kono proshno ache ki?"
+"""
         )
 
     @function_tool()
@@ -381,57 +409,55 @@ If they confirm, call the transfer_to_human tool with a brief summary of the iss
                     )
                 )
 
-                logger.info("[HANDOFF] SIP call placed, waiting for human to join...")
+                logger.info("[HANDOFF] SIP call placed, waiting for human to pick up...")
 
-                # Brief the human agent about the issue
-                await asyncio.sleep(3)
-                session = context.session
-                await session.generate_reply(
-                    instructions=(
-                        f"A human support agent has joined. Say this brief summary to them: "
-                        f"'The customer needs help with: {summary}'. "
-                        f"After saying the summary, go COMPLETELY SILENT. "
-                        f"Do not speak, do not respond to anything. "
-                        f"Wait until you are told to resume."
-                    )
-                )
-
-                logger.info("[HANDOFF] Agent briefed human, now going silent")
-
-                # Wait for the human support participant to disconnect
+                # Events for tracking the human support participant
+                human_joined = asyncio.Event()
                 human_left = asyncio.Event()
+
+                def _on_participant_connected(participant: Any) -> None:
+                    if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
+                        logger.info("[HANDOFF] Human support agent JOINED: %s", participant.identity)
+                        human_joined.set()
 
                 def _on_participant_disconnected(participant: Any) -> None:
                     if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
-                        logger.info(
-                            "[HANDOFF] Human support agent disconnected: %s",
-                            participant.identity,
-                        )
+                        logger.info("[HANDOFF] Human support agent LEFT: %s", participant.identity)
                         human_left.set()
 
+                self._room.on("participant_connected", _on_participant_connected)
                 self._room.on("participant_disconnected", _on_participant_disconnected)
 
-                # Also check if the human is already gone (race condition)
-                human_in_room = any(
+                # Check if human already joined (race condition — they may have connected before we registered the listener)
+                already_in = any(
                     p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
                     for p in self._room.remote_participants.values()
                 )
-                if not human_in_room:
-                    # Human might not have joined yet — wait up to 60s
-                    for _ in range(60):
-                        await asyncio.sleep(1)
-                        human_in_room = any(
-                            p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
-                            for p in self._room.remote_participants.values()
-                        )
-                        if human_in_room:
-                            break
+                if already_in:
+                    human_joined.set()
 
-                if human_in_room:
-                    logger.info("[HANDOFF] Human agent is in the room, waiting for them to leave...")
-                    await human_left.wait()
-                else:
-                    logger.warning("[HANDOFF] Human agent never joined, resuming after timeout")
+                # Wait up to 60s for human to pick up
+                try:
+                    await asyncio.wait_for(human_joined.wait(), timeout=60)
+                except asyncio.TimeoutError:
+                    logger.warning("[HANDOFF] Human agent never picked up (60s timeout)")
+                    return
+
+                # Human picked up — brief them with the summary
+                logger.info("[HANDOFF] Human picked up, briefing them...")
+                session = context.session
+                await session.generate_reply(
+                    instructions=(
+                        f"Say only this one sentence to the human support agent: "
+                        f"'The customer needs help with {summary}.' "
+                        f"Nothing else. Just that one sentence."
+                    )
+                )
+
+                logger.info("[HANDOFF] Agent briefed human, now going silent. Waiting for human to leave...")
+
+                # Wait for human to hang up
+                await human_left.wait()
 
         except Exception as e:
             logger.error("[HANDOFF] Failed to connect human support: %s", e)
@@ -498,7 +524,7 @@ async def entrypoint(ctx: JobContext) -> None:
     t_model = time.monotonic()
     realtime_model = openai.realtime.RealtimeModel(
         model="gpt-realtime-1.5",
-        voice="coral",
+        voice="marin",
         temperature=0.7,
     )
     logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
