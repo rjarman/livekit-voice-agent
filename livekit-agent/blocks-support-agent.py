@@ -277,6 +277,7 @@ class BlocksSupportAgent(Agent):
         self._room = room
         self._handoff_active = False
         self._last_topic = ""
+        self._language = "en"  # default; set by set_language tool
         super().__init__(
             instructions="""\
 You are a Blocks Cloud support agent on a voice call.
@@ -293,10 +294,12 @@ Your speech should sound natural, not Chinese-accented. The user is from Banglad
 LANGUAGE RULES:
 1. Your greeting is ALWAYS bilingual: Bengali first, then English.
 2. In the greeting, ask the customer which language they prefer: Bengali or English.
-3. Once the customer picks a language, you MUST use ONLY that language for the ENTIRE rest of the conversation. \
+3. As soon as the customer picks a language, you MUST call the set_language tool with 'bn' or 'en'. \
+This is MANDATORY — always call set_language before responding in their chosen language.
+4. Once set, use ONLY that language for the ENTIRE rest of the conversation. \
 NEVER switch languages mid-conversation, even if the customer mixes languages occasionally.
-4. If Bengali: speak natural Bengali (except product names like "Blocks Cloud", "deploy", "API").
-5. If English: speak ONLY in English.
+5. If Bengali: speak natural Bengali (except product names like "Blocks Cloud", "deploy", "API").
+6. If English: speak ONLY in English.
 
 BEHAVIOR RULES:
 1. You are a helpful support agent for Blocks Cloud — a developer-focused cloud platform.
@@ -310,12 +313,9 @@ BEHAVIOR RULES:
 
 HUMAN HANDOFF RULES:
 1. If the customer asks for a human, or you cannot answer after searching, offer to transfer.
-2. If they confirm, call transfer_to_human with a brief summary.
-3. When a human support agent joins, briefly summarize the issue to them, then stay quiet \
-while they handle the customer. Do NOT interrupt the human-to-customer conversation.
-4. IMPORTANT: When you receive a message saying "The human support agent has left", \
-the handoff is OVER. You MUST immediately resume normal conversation. \
-Ask the customer warmly if they need anything else. Do NOT mention silence or staying quiet.
+2. If they confirm, call transfer_to_human with a brief summary in the customer's language.
+3. After calling transfer_to_human, tell the customer to wait. Then stay quiet. \
+The system will handle the summary and resume automatically — do NOT speak during the handoff.
 
 EXAMPLES — follow these patterns exactly:
 
@@ -323,22 +323,32 @@ Example 1 — Greeting:
 You: "Assalamu Alaikum! Ami Blocks Cloud er support assistant. Apni ki Banglay shahajjo chan naki English e? \
 Welcome! I am your Blocks Cloud support assistant. Would you prefer Bengali or English?"
 
-Example 2 — Customer picks Bengali, asks a question:
+Example 2 — Customer picks Bengali:
 Customer: "Bangla"
-You: [calls search_docs tool]
-You: "Blocks Cloud e deploy korte hole apnake prothome repository connect korte hobe. Tarpor deployment section e giye Deploy Now button e click korun."
+You: [calls set_language with 'bn']
+You: [calls search_docs if they asked a question, or responds in Bengali]
 
-Example 3 — Handoff and resume:
+Example 3 — Handoff:
 Customer: "Ami ekjon manush er shathe kotha bolte chai"
 You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkha korun."
-[calls transfer_to_human tool]
-[human joins]
-You: "The customer needs help with deployment configuration."
-[stays quiet while human talks to customer]
-[human leaves]
-You: "Apnar aar kono proshno ache ki?"
+[calls transfer_to_human with summary in Bengali]
+[system handles the rest — agent stays quiet until system resumes it]
 """
         )
+
+    @function_tool()
+    async def set_language(
+        self,
+        context: RunContext,
+        language: str,
+    ) -> str:
+        """Set the customer's preferred language. You MUST call this as soon as the customer chooses Bengali or English.
+        Args:
+            language: 'bn' for Bengali or 'en' for English.
+        """
+        self._language = language if language in ("bn", "en") else "en"
+        logger.info("[LANG] Customer language set to: %s", self._language)
+        return f"Language set to {'Bengali' if self._language == 'bn' else 'English'}. Continue in this language."
 
     @function_tool()
     async def search_docs(
@@ -456,11 +466,8 @@ You: "Apnar aar kono proshno ache ki?"
         logger.info("[HANDOFF] Agent deaf=%s mute=%s", deaf, mute)
 
     async def _connect_human_support(self, context: RunContext, summary: str) -> None:
-        """Place SIP call to human support, manage handoff lifecycle with recording."""
+        """Place SIP call to human support, manage handoff lifecycle."""
         room_name = self._room.name
-        transcript_chunks: list[str] = []
-        audio_buffer: list[bytes] = []
-        recording = False
 
         try:
             lk_url = LIVEKIT_URL.replace("ws://", "http://").replace("wss://", "https://")
@@ -522,88 +529,35 @@ You: "Apnar aar kono proshno ache ki?"
                     self._handoff_active = False
                     return
 
-                # --- Human picked up: brief them, then go deaf+mute ---
-                logger.info("[HANDOFF] Human picked up, briefing them...")
+                # --- Human picked up: brief them via session.say() ---
+                logger.info("[HANDOFF] Human picked up, delivering summary (lang=%s)", self._language)
                 session = context.session
-                await session.generate_reply(
-                    instructions=(
-                        f"Say only this one sentence to the human support agent: "
-                        f"'The customer needs help with {summary}.' "
-                        f"Nothing else. Just that one sentence."
-                    )
-                )
-                # Give time for TTS to finish speaking the summary
-                await asyncio.sleep(2)
-
-                # --- Start recording BEFORE going deaf ---
-                # We must capture AudioStreams while tracks are still subscribed.
-                recording = True
-
-                for participant in self._room.remote_participants.values():
-                    for pub in participant.track_publications.values():
-                        if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track:
-                            audio_stream = rtc.AudioStream(pub.track)
-                            asyncio.create_task(
-                                self._audio_stream_reader(audio_stream, audio_buffer, human_left)
-                            )
-                            logger.info("[HANDOFF] Recording audio from %s", participant.identity)
-
-                # Capture audio from newly joining tracks (e.g. the human support agent)
-                def _on_track_subscribed(track: Any, publication: Any, participant: Any) -> None:
-                    if publication.kind == rtc.TrackKind.KIND_AUDIO and not human_left.is_set():
-                        audio_stream = rtc.AudioStream(track)
-                        asyncio.create_task(
-                            self._audio_stream_reader(audio_stream, audio_buffer, human_left)
+                try:
+                    if self._language == "bn":
+                        speech = await session.say(
+                            f"Customer er somossa holo: {summary}.",
+                            allow_interruptions=False,
                         )
-                        logger.info("[HANDOFF] Recording new track from %s", participant.identity)
+                    else:
+                        speech = await session.say(
+                            f"The customer needs help with: {summary}.",
+                            allow_interruptions=False,
+                        )
+                    # Wait for TTS to finish speaking
+                    await speech.join()
+                    logger.info("[HANDOFF] Summary delivered to human agent")
+                except Exception as e:
+                    logger.error("[HANDOFF] Failed to deliver summary: %s", e)
 
-                self._room.on("track_subscribed", _on_track_subscribed)
-
-                # Now mute the agent (so it doesn't speak during handoff).
-                # Don't go fully deaf — we need tracks subscribed for recording.
-                # Instead, just mute output so the agent stays quiet.
-                logger.info("[HANDOFF] Agent going mute, recording started")
-                self._set_agent_deaf_mute(deaf=False, mute=True)
-
-                # --- Transcribe in chunks while human talks ---
-                async def _chunked_transcriber() -> None:
-                    chunk_frames = SAMPLE_RATE * TRANSCRIBE_CHUNK_SECONDS
-                    while not human_left.is_set():
-                        await asyncio.sleep(TRANSCRIBE_CHUNK_SECONDS)
-                        if audio_buffer and not human_left.is_set():
-                            # Take current buffer, clear it
-                            frames_to_transcribe = list(audio_buffer)
-                            audio_buffer.clear()
-                            if frames_to_transcribe:
-                                wav_bytes = _audio_frames_to_wav_bytes(
-                                    frames_to_transcribe, SAMPLE_RATE, NUM_CHANNELS
-                                )
-                                text = await _transcribe_audio(wav_bytes)
-                                if text.strip():
-                                    transcript_chunks.append(text.strip())
-                                    logger.info("[HANDOFF] Transcribed chunk: %s", text[:80])
-
-                transcriber_task = asyncio.create_task(_chunked_transcriber())
+                # Go deaf+mute so the model's conversation state stays clean.
+                # Audio recording during handoff is not possible while deaf,
+                # so we skip it. The agent will resume without transcript context.
+                logger.info("[HANDOFF] Agent going deaf+mute during handoff")
+                self._set_agent_deaf_mute(deaf=True, mute=True)
 
                 # --- Wait for human to hang up ---
-                logger.info("[HANDOFF] Recording human-to-human conversation...")
+                logger.info("[HANDOFF] Waiting for human to finish...")
                 await human_left.wait()
-
-                # Stop recording and transcribe remaining buffer
-                recording = False
-                transcriber_task.cancel()
-                try:
-                    await transcriber_task
-                except asyncio.CancelledError:
-                    pass
-
-                # Transcribe any remaining audio
-                if audio_buffer:
-                    wav_bytes = _audio_frames_to_wav_bytes(audio_buffer, SAMPLE_RATE, NUM_CHANNELS)
-                    text = await _transcribe_audio(wav_bytes)
-                    if text.strip():
-                        transcript_chunks.append(text.strip())
-                    audio_buffer.clear()
 
         except Exception as e:
             logger.error("[HANDOFF] Failed during handoff: %s", e)
@@ -613,32 +567,24 @@ You: "Apnar aar kono proshno ache ki?"
         self._set_agent_deaf_mute(deaf=False, mute=False)
         self._handoff_active = False
 
-        full_transcript = " ".join(transcript_chunks)
-        logger.info("[HANDOFF] Full transcript (%d chars): %s", len(full_transcript), full_transcript[:200])
+        # Small delay to let audio tracks re-establish after undeafening
+        await asyncio.sleep(1)
 
         try:
             session = context.session
-            if full_transcript:
-                await session.generate_reply(
-                    instructions=(
-                        "The human support agent has left the call. The handoff is OVER. "
-                        "You are back in control. Resume speaking normally. "
-                        f"Here is what the human discussed with the customer: '{full_transcript}'. "
-                        "Now ask the customer warmly in their preferred language "
-                        "if there is anything else you can help with. "
-                        "Do NOT mention silence, staying quiet, or the handoff process."
-                    )
+            logger.info("[HANDOFF] Resuming with session.say() (lang=%s)", self._language)
+            if self._language == "bn":
+                speech = await session.say(
+                    "Human support agent call chere diyechen. Apnar aar kono proshno thakle amake bolun.",
+                    allow_interruptions=False,
                 )
             else:
-                await session.generate_reply(
-                    instructions=(
-                        "The human support agent has left the call. The handoff is OVER. "
-                        "You are back in control. Resume speaking normally. "
-                        "Ask the customer warmly in their preferred language "
-                        "if there is anything else you can help with. "
-                        "Do NOT mention silence, staying quiet, or the handoff process."
-                    )
+                speech = await session.say(
+                    "The human support agent has disconnected. Let me know if you have any other questions.",
+                    allow_interruptions=False,
                 )
+            await speech.join()
+            logger.info("[HANDOFF] Resume message delivered")
         except Exception as e:
             logger.error("[HANDOFF] Failed to resume agent: %s", e)
 
