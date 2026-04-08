@@ -699,7 +699,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # So we don't use generate_reply for greeting — the model will
         # auto-greet when it hears the user's microphone via server_vad.
         realtime_model = QwenRealtimeModel(
-            model="qwen3.5-omni-plus-realtime",
+            model="qwen3.5-omni-flash-realtime",
             voice="Tina",
             temperature=0.7,
         )
