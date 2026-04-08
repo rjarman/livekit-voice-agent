@@ -1,11 +1,11 @@
 """
 Qwen-Omni-Realtime plugin for LiveKit Agents.
 
-DashScope's Realtime WebSocket API uses older event names (same as Azure OpenAI).
-We extend the OpenAI plugin with minimal overrides to handle the differences:
-    1. URL: DashScope Singapore endpoint with ?model= parameter
+DashScope differences from OpenAI/Azure:
+    1. Event names: same as Azure (older format) — handled by is_azure=True
     2. Auth: Bearer token (not Azure's api-key header)
-    3. Event mapping: Enabled via is_azure=True flag
+    3. Audio format: "pcm" (not "pcm16")
+    4. URL: DashScope Singapore endpoint with ?model= parameter
 
 Supported models:
     - qwen-omni-turbo-realtime
@@ -29,7 +29,7 @@ Usage:
 import asyncio
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import aiohttp
 from livekit.agents import APIConnectOptions
@@ -49,13 +49,29 @@ DEFAULT_MODEL = "qwen-omni-turbo-realtime"
 DEFAULT_VOICE = "Cherry"
 
 
+def _fix_dashscope_event(event: dict[str, Any]) -> None:
+    """In-place fix of outgoing events for DashScope compatibility.
+
+    DashScope expects "pcm" audio format, Azure sends "pcm16".
+    """
+    if event.get("type") == "session.update":
+        session = event.get("session", {})
+        if session.get("input_audio_format") == "pcm16":
+            session["input_audio_format"] = "pcm"
+        if session.get("output_audio_format") == "pcm16":
+            session["output_audio_format"] = "pcm"
+
+
 class QwenRealtimeSession(OpenAIRealtimeSession):
-    """Session that uses Bearer auth and DashScope URL format."""
+    """Session with DashScope-specific auth and audio format handling."""
+
+    def __init__(self, realtime_model: "RealtimeModel") -> None:
+        super().__init__(realtime_model)
+        # Listen to outgoing events and fix format before they're sent
+        self.on("openai_client_event_queued", _fix_dashscope_event)
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
-        """Override to use Bearer auth instead of Azure's api-key header."""
-        logger.warning("[QWEN] _create_ws_conn called — using Bearer auth")
-
+        """Use Bearer auth (not Azure's api-key header)."""
         headers = {
             "User-Agent": "LiveKit Agents",
             "Authorization": f"Bearer {self._realtime_model._opts.api_key}",
@@ -69,7 +85,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             azure_deployment=self._realtime_model._opts.azure_deployment,
         )
 
-        logger.warning("[QWEN] Connecting to: %s", url)
+        logger.info("[QWEN] Connecting to: %s", url)
 
         try:
             ws = await asyncio.wait_for(
@@ -78,7 +94,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                 ),
                 self._realtime_model._opts.conn_options.timeout,
             )
-            logger.warning("[QWEN] WebSocket connected successfully!")
+            logger.info("[QWEN] WebSocket connected!")
             return ws
         except aiohttp.ClientError as e:
             logger.error("[QWEN] Client error: %s", e)
@@ -135,7 +151,7 @@ class RealtimeModel(OpenAIRealtimeModel):
             **kwargs,
         )
 
-        # Enable Azure event name mapping — DashScope uses the same older names
+        # Enable Azure event name mapping (DashScope uses same older names)
         self._opts.is_azure = True
 
     @property
@@ -143,7 +159,7 @@ class RealtimeModel(OpenAIRealtimeModel):
         return "qwen"
 
     def session(self) -> QwenRealtimeSession:
-        """Create a QwenRealtimeSession with correct auth and URL handling."""
+        """Create a QwenRealtimeSession with correct auth and format handling."""
         sess = QwenRealtimeSession(self)
         self._sessions.add(sess)
         return sess
