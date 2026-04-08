@@ -51,13 +51,21 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
 
         if event_type == "session.update":
             session = event.get("session", {})
+            # Fix audio format
             if session.get("input_audio_format") == "pcm16":
                 session["input_audio_format"] = "pcm"
             if session.get("output_audio_format") == "pcm16":
                 session["output_audio_format"] = "pcm"
-            logger.warning("[QWEN] >>> session.update voice=%s modalities=%s audio_fmt=%s",
-                          session.get("voice"), session.get("modalities"),
-                          session.get("input_audio_format"))
+
+            # DashScope treats None/null fields as "disable" rather than "keep existing".
+            # Remove None fields so subsequent session.update calls don't
+            # accidentally disable audio output by sending voice=null, modalities=null.
+            keys_to_remove = [k for k, v in session.items() if v is None]
+            for k in keys_to_remove:
+                del session[k]
+
+            logger.warning("[QWEN] >>> session.update fields=%s",
+                          list(session.keys()))
 
         elif event_type == "response.create":
             resp = event.get("response", {})
