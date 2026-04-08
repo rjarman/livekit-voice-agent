@@ -62,9 +62,12 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             #   enable_search, search_options
             # All other fields (model, speed, input_audio_transcription, etc.)
             # cause DashScope to silently fall back to text-only output.
+            # Qwen 3.5 models are strict — only accept these fields.
+            # "tools" causes 3.5 models to close the connection immediately.
+            # Tools are sent separately after the session is established.
             ALLOWED_FIELDS = {
                 "modalities", "voice", "instructions", "input_audio_format",
-                "output_audio_format", "turn_detection", "tools",
+                "output_audio_format", "turn_detection",
                 "enable_search", "search_options", "temperature",
             }
             keys_to_remove = [
@@ -81,12 +84,14 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             # Force DashScope-compatible turn_detection format
             td = session.get("turn_detection")
             if td is not None and isinstance(td, dict):
-                # Ensure DashScope format
                 session["turn_detection"] = {
                     "type": "server_vad",
                     "threshold": td.get("threshold", 0.5),
                     "silence_duration_ms": td.get("silence_duration_ms", 800),
                 }
+            elif td is None and "turn_detection" in session:
+                # If explicitly set to None, remove it and use default
+                del session["turn_detection"]
 
             logger.warning("[QWEN] >>> session.update fields=%s",
                           list(session.keys()))
