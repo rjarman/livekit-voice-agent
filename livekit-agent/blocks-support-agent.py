@@ -428,17 +428,34 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
             return "A human agent is already being connected. Please wait."
 
         summary = issue_summary or self._last_topic or "general support inquiry"
-        logger.info("[HANDOFF] Starting transfer — summary: %s", summary)
+        logger.info("[HANDOFF] Starting transfer — summary: %s, lang=%s", summary, self._language)
 
         self._handoff_active = True
+
+        # Tell the customer to wait via session.say() — direct TTS, no model involved
+        try:
+            if self._language == "bn":
+                speech = await context.session.say(
+                    "Ektu opekkha korun, ami apnake ekjon support agent er shathe connect korchhi.",
+                    allow_interruptions=False,
+                )
+            else:
+                speech = await context.session.say(
+                    "Please wait while I connect you with a human support agent.",
+                    allow_interruptions=False,
+                )
+            await speech.join()
+        except Exception as e:
+            logger.error("[HANDOFF] Failed to say wait message: %s", e)
+
+        # Mute agent immediately so the model cannot speak during handoff
+        self._set_agent_deaf_mute(deaf=False, mute=True)
 
         # Place SIP call to human support in the background
         asyncio.create_task(self._connect_human_support(context, summary))
 
-        return (
-            "Tell the customer that you are connecting them with a human support agent now. "
-            "Ask them to please wait a moment."
-        )
+        # Return minimal response — agent is already muted so model can't speak
+        return "Transfer initiated. Stay completely silent."
 
     def _set_agent_deaf_mute(self, deaf: bool, mute: bool) -> None:
         """Control the agent's audio input (deaf) and output (mute).
@@ -529,8 +546,9 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                     self._handoff_active = False
                     return
 
-                # --- Human picked up: brief them via session.say() ---
+                # --- Human picked up: unmute briefly to deliver summary ---
                 logger.info("[HANDOFF] Human picked up, delivering summary (lang=%s)", self._language)
+                self._set_agent_deaf_mute(deaf=False, mute=False)
                 session = context.session
                 try:
                     if self._language == "bn":
@@ -543,15 +561,12 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                             f"The customer needs help with: {summary}.",
                             allow_interruptions=False,
                         )
-                    # Wait for TTS to finish speaking
                     await speech.join()
                     logger.info("[HANDOFF] Summary delivered to human agent")
                 except Exception as e:
                     logger.error("[HANDOFF] Failed to deliver summary: %s", e)
 
-                # Go deaf+mute so the model's conversation state stays clean.
-                # Audio recording during handoff is not possible while deaf,
-                # so we skip it. The agent will resume without transcript context.
+                # Go deaf+mute for the duration of the human-customer conversation
                 logger.info("[HANDOFF] Agent going deaf+mute during handoff")
                 self._set_agent_deaf_mute(deaf=True, mute=True)
 
