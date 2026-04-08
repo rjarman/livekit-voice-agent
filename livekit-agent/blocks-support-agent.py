@@ -311,9 +311,11 @@ BEHAVIOR RULES:
 HUMAN HANDOFF RULES:
 1. If the customer asks for a human, or you cannot answer after searching, offer to transfer.
 2. If they confirm, call transfer_to_human with a brief summary.
-3. When a human support agent joins the call, say ONLY a brief summary of the issue to them, \
-then go COMPLETELY SILENT. Do not speak again until the human leaves.
-4. When the human leaves, resume and ask if the customer needs anything else.
+3. When a human support agent joins, briefly summarize the issue to them, then stay quiet \
+while they handle the customer. Do NOT interrupt the human-to-customer conversation.
+4. IMPORTANT: When you receive a message saying "The human support agent has left", \
+the handoff is OVER. You MUST immediately resume normal conversation. \
+Ask the customer warmly if they need anything else. Do NOT mention silence or staying quiet.
 
 EXAMPLES — follow these patterns exactly:
 
@@ -326,13 +328,13 @@ Customer: "Bangla"
 You: [calls search_docs tool]
 You: "Blocks Cloud e deploy korte hole apnake prothome repository connect korte hobe. Tarpor deployment section e giye Deploy Now button e click korun."
 
-Example 3 — Handoff:
+Example 3 — Handoff and resume:
 Customer: "Ami ekjon manush er shathe kotha bolte chai"
 You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkha korun."
 [calls transfer_to_human tool]
 [human joins]
 You: "The customer needs help with deployment configuration."
-[stays completely silent until human hangs up]
+[stays quiet while human talks to customer]
 [human leaves]
 You: "Apnar aar kono proshno ache ki?"
 """
@@ -619,18 +621,22 @@ You: "Apnar aar kono proshno ache ki?"
             if full_transcript:
                 await session.generate_reply(
                     instructions=(
-                        "The human support agent has left the call. You can speak again now. "
-                        f"Here is what the human agent discussed with the customer: '{full_transcript}'. "
-                        "Based on this conversation, ask the customer warmly in their preferred language "
-                        "if there is anything else you can help them with."
+                        "The human support agent has left the call. The handoff is OVER. "
+                        "You are back in control. Resume speaking normally. "
+                        f"Here is what the human discussed with the customer: '{full_transcript}'. "
+                        "Now ask the customer warmly in their preferred language "
+                        "if there is anything else you can help with. "
+                        "Do NOT mention silence, staying quiet, or the handoff process."
                     )
                 )
             else:
                 await session.generate_reply(
                     instructions=(
-                        "The human support agent has left the call. You can speak again now. "
-                        "Ask the customer warmly in their preferred language: "
-                        "'Is there anything else I can help you with?'"
+                        "The human support agent has left the call. The handoff is OVER. "
+                        "You are back in control. Resume speaking normally. "
+                        "Ask the customer warmly in their preferred language "
+                        "if there is anything else you can help with. "
+                        "Do NOT mention silence, staying quiet, or the handoff process."
                     )
                 )
         except Exception as e:
