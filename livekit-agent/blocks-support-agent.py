@@ -513,37 +513,43 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
 
                 logger.info("[HANDOFF] SIP call placed, waiting for human to pick up...")
 
-                # --- Track human join/leave ---
-                human_joined = asyncio.Event()
+                # --- Track human answer/leave ---
+                # SIP participant joins the room immediately (before phone is answered).
+                # We detect the actual answer by waiting for the participant to publish
+                # an audio track — this only happens when the call is connected.
+                human_answered = asyncio.Event()
                 human_left = asyncio.Event()
 
-                def _on_participant_connected(participant: Any) -> None:
-                    if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
-                        logger.info("[HANDOFF] Human support agent JOINED: %s", participant.identity)
-                        human_joined.set()
+                def _on_track_published(publication: Any, participant: Any) -> None:
+                    if (participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
+                            and publication.kind == rtc.TrackKind.KIND_AUDIO):
+                        logger.info("[HANDOFF] Human support agent ANSWERED (audio track published): %s",
+                                    participant.identity)
+                        human_answered.set()
 
                 def _on_participant_disconnected(participant: Any) -> None:
                     if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
                         logger.info("[HANDOFF] Human support agent LEFT: %s", participant.identity)
                         human_left.set()
 
-                self._room.on("participant_connected", _on_participant_connected)
+                self._room.on("track_published", _on_track_published)
                 self._room.on("participant_disconnected", _on_participant_disconnected)
 
-                # Race condition check
-                already_in = any(
-                    p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
-                    for p in self._room.remote_participants.values()
-                )
-                if already_in:
-                    human_joined.set()
+                # Check if already answered (has audio track)
+                for p in self._room.remote_participants.values():
+                    if p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
+                        for pub in p.track_publications.values():
+                            if pub.kind == rtc.TrackKind.KIND_AUDIO:
+                                human_answered.set()
+                                break
 
-                # Wait up to 60s for human to pick up
+                # Wait up to 60s for human to actually answer the phone
                 try:
-                    await asyncio.wait_for(human_joined.wait(), timeout=60)
+                    await asyncio.wait_for(human_answered.wait(), timeout=60)
                 except asyncio.TimeoutError:
-                    logger.warning("[HANDOFF] Human agent never picked up (60s timeout)")
+                    logger.warning("[HANDOFF] Human agent never answered (60s timeout)")
                     self._handoff_active = False
+                    self._set_agent_deaf_mute(deaf=False, mute=False)
                     return
 
                 # --- Human picked up: unmute briefly to deliver summary ---
