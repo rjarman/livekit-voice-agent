@@ -535,18 +535,10 @@ You: "Apnar aar kono proshno ache ki?"
                 # Give time for TTS to finish speaking the summary
                 await asyncio.sleep(2)
 
-                # Go deaf and mute
-                logger.info("[HANDOFF] Agent going deaf+mute, starting recording")
-                self._set_agent_deaf_mute(deaf=True, mute=True)
-
-                # --- Record audio from all remote participants ---
+                # --- Start recording BEFORE going deaf ---
+                # We must capture AudioStreams while tracks are still subscribed.
                 recording = True
 
-                def _on_audio_frame(frame: rtc.AudioFrame) -> None:
-                    if recording and not human_left.is_set():
-                        audio_buffer.append(frame.data.tobytes())
-
-                # Subscribe to audio from all remote participants for recording
                 for participant in self._room.remote_participants.values():
                     for pub in participant.track_publications.values():
                         if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track:
@@ -554,16 +546,24 @@ You: "Apnar aar kono proshno ache ki?"
                             asyncio.create_task(
                                 self._audio_stream_reader(audio_stream, audio_buffer, human_left)
                             )
+                            logger.info("[HANDOFF] Recording audio from %s", participant.identity)
 
-                # Also capture audio from newly subscribed tracks
+                # Capture audio from newly joining tracks (e.g. the human support agent)
                 def _on_track_subscribed(track: Any, publication: Any, participant: Any) -> None:
                     if publication.kind == rtc.TrackKind.KIND_AUDIO and not human_left.is_set():
                         audio_stream = rtc.AudioStream(track)
                         asyncio.create_task(
                             self._audio_stream_reader(audio_stream, audio_buffer, human_left)
                         )
+                        logger.info("[HANDOFF] Recording new track from %s", participant.identity)
 
                 self._room.on("track_subscribed", _on_track_subscribed)
+
+                # Now mute the agent (so it doesn't speak during handoff).
+                # Don't go fully deaf — we need tracks subscribed for recording.
+                # Instead, just mute output so the agent stays quiet.
+                logger.info("[HANDOFF] Agent going mute, recording started")
+                self._set_agent_deaf_mute(deaf=False, mute=True)
 
                 # --- Transcribe in chunks while human talks ---
                 async def _chunked_transcriber() -> None:
