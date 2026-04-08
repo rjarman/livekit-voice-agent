@@ -571,7 +571,7 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                         )
                     # Wait for speech to finish playing (not just generating)
                     if speech:
-                        await speech.join()
+                        await speech.wait_for_playout()
                     logger.info("[HANDOFF] Summary delivered to human agent")
                 except Exception as e:
                     logger.error("[HANDOFF] Failed to deliver summary: %s", e)
@@ -614,7 +614,7 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                     ),
                 )
             if speech:
-                await speech.join()
+                await speech.wait_for_playout()
             logger.info("[HANDOFF] Resume message delivered")
         except Exception as e:
             logger.error("[HANDOFF] Failed to resume agent: %s", e)
