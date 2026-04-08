@@ -85,7 +85,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             azure_deployment=self._realtime_model._opts.azure_deployment,
         )
 
-        logger.info("[QWEN] Connecting to: %s", url)
+        logger.warning("[QWEN] Connecting to: %s", url)
 
         try:
             ws = await asyncio.wait_for(
@@ -94,7 +94,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                 ),
                 self._realtime_model._opts.conn_options.timeout,
             )
-            logger.info("[QWEN] WebSocket connected!")
+            logger.warning("[QWEN] WebSocket connected!")
             return ws
         except aiohttp.ClientError as e:
             logger.error("[QWEN] Client error: %s", e)
