@@ -42,8 +42,8 @@ logger = logging.getLogger("livekit.plugins.qwen")
 # The OpenAI plugin constructs the WS URL from base_url by appending /realtime
 # DashScope expects: wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime
 # So we set base_url to the HTTP equivalent and let the plugin convert it
-DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api-ws/v1"
-DASHSCOPE_CN_BASE_URL = "https://dashscope.aliyuncs.com/api-ws/v1"
+DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
+DASHSCOPE_CN_BASE_URL = "https://dashscope.aliyuncs.com/api-ws/v1/realtime"
 
 # Default model — fastest option for low latency from South Asia
 DEFAULT_MODEL = "qwen-omni-turbo-realtime"
