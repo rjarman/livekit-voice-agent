@@ -1,27 +1,11 @@
 """
-Qwen-Omni-Realtime plugin for LiveKit Agents.
+Qwen-Omni-Realtime plugin for LiveKit Agents — DEBUG VERSION.
 
-Handles DashScope protocol differences from OpenAI:
-    1. Event names: same as Azure (older format) — is_azure=True
-    2. Auth: Bearer token (not Azure's api-key header)
-    3. Audio format: "pcm" (not "pcm16")
-    4. Metadata: DashScope doesn't echo response.create metadata —
-       we inject client_event_id to resolve generate_reply futures
-
-Supported models:
-    - qwen-omni-turbo-realtime
-    - qwen-omni-plus-realtime
-    - qwen3-omni-flash-realtime
-    - qwen3.5-omni-flash-realtime
-    - qwen3.5-omni-plus-realtime
-
-Usage:
-    from livekit.plugins.qwen import RealtimeModel
-    model = RealtimeModel(model="qwen-omni-turbo-realtime", voice="Cherry")
-    session = AgentSession(llm=model, vad=vad)
+Handles DashScope protocol differences from OpenAI with extensive logging.
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import Any, Optional
@@ -45,71 +29,123 @@ DEFAULT_VOICE = "Cherry"
 
 
 class QwenRealtimeSession(OpenAIRealtimeSession):
-    """Session with DashScope-specific fixes."""
+    """Session with DashScope-specific fixes and debug logging."""
 
     def __init__(self, realtime_model: "RealtimeModel") -> None:
         super().__init__(realtime_model)
         self._last_response_create_event_id: str | None = None
-        # Fix outgoing events
+        self._audio_chunks_received = 0
+        self._generation_created_emitted = False
         self.on("openai_client_event_queued", self._fix_outgoing)
-        # Fix incoming events
         self.on("openai_server_event_received", self._fix_incoming)
+        # Also monitor generation events
+        self.on("generation_created", self._on_generation_created)
+
+    def _on_generation_created(self, event: Any) -> None:
+        self._generation_created_emitted = True
+        logger.warning("[QWEN] generation_created emitted! user_initiated=%s",
+                      getattr(event, 'user_initiated', 'unknown'))
 
     def _fix_outgoing(self, event: dict[str, Any]) -> None:
-        """Fix outgoing events for DashScope compatibility."""
         event_type = event.get("type", "")
 
-        # Fix audio format: Azure sends "pcm16", DashScope expects "pcm"
         if event_type == "session.update":
             session = event.get("session", {})
             if session.get("input_audio_format") == "pcm16":
                 session["input_audio_format"] = "pcm"
             if session.get("output_audio_format") == "pcm16":
                 session["output_audio_format"] = "pcm"
+            logger.warning("[QWEN] >>> session.update voice=%s modalities=%s audio_fmt=%s",
+                          session.get("voice"), session.get("modalities"),
+                          session.get("input_audio_format"))
 
-        # Track response.create event_id for metadata injection
         elif event_type == "response.create":
             resp = event.get("response", {})
             metadata = resp.get("metadata", {})
             if isinstance(metadata, dict):
                 self._last_response_create_event_id = metadata.get("client_event_id")
+            logger.warning("[QWEN] >>> response.create event_id=%s client_event_id=%s",
+                          event.get("event_id"), self._last_response_create_event_id)
+
+        elif event_type == "input_audio_buffer.append":
+            pass  # Don't log audio data
+        else:
+            logger.warning("[QWEN] >>> %s", event_type)
 
     def _fix_incoming(self, event: dict[str, Any]) -> None:
-        """Fix incoming events for DashScope compatibility."""
         event_type = event.get("type", "")
 
-        # Fix 1: DashScope doesn't echo metadata from response.create.
-        if event_type == "response.created" and self._last_response_create_event_id:
+        # Fix 1: Inject client_event_id
+        if event_type == "response.created":
             response = event.get("response", {})
-            if not isinstance(response.get("metadata"), dict):
-                response["metadata"] = {}
-            if "client_event_id" not in response["metadata"]:
-                response["metadata"]["client_event_id"] = self._last_response_create_event_id
-                logger.info("[QWEN] Injected client_event_id into response.created")
-            self._last_response_create_event_id = None
+            response_id = response.get("id", "unknown")
+            has_metadata = isinstance(response.get("metadata"), dict)
 
-        # Fix 2: DashScope's output_item.added may have different item structure.
-        # Ensure item has 'object' field that OpenAI expects.
+            if self._last_response_create_event_id:
+                if not has_metadata:
+                    response["metadata"] = {}
+                if "client_event_id" not in response.get("metadata", {}):
+                    response["metadata"]["client_event_id"] = self._last_response_create_event_id
+                    logger.warning("[QWEN] <<< response.created id=%s — INJECTED client_event_id=%s",
+                                  response_id, self._last_response_create_event_id)
+                self._last_response_create_event_id = None
+            else:
+                logger.warning("[QWEN] <<< response.created id=%s — no pending event_id to inject",
+                              response_id)
+
+        # Fix 2: output_item.added
         elif event_type == "response.output_item.added":
             item = event.get("item", {})
             if "object" not in item:
                 item["object"] = "realtime.item"
+            logger.warning("[QWEN] <<< response.output_item.added id=%s type=%s object=%s",
+                          item.get("id"), item.get("type"), item.get("object"))
 
-        # Fix 3: DashScope's content_part.added may differ.
+        # Fix 3: content_part.added
         elif event_type == "response.content_part.added":
             part = event.get("part", {})
-            # DashScope uses "audio" type, OpenAI expects it too but let's ensure
             if "type" not in part and "audio" in str(event):
                 part["type"] = "audio"
+            logger.warning("[QWEN] <<< response.content_part.added part_type=%s item_id=%s",
+                          part.get("type"), event.get("item_id"))
 
-        # Fix 4: response.output_item.done — ensure item structure matches
+        # Fix 4: output_item.done
         elif event_type == "response.output_item.done":
             item = event.get("item", {})
             if "object" not in item:
                 item["object"] = "realtime.item"
+            logger.warning("[QWEN] <<< response.output_item.done id=%s", item.get("id"))
+
+        # Audio transcript events
+        elif "audio_transcript" in event_type:
+            text = event.get("delta", event.get("transcript", ""))
+            logger.warning("[QWEN] <<< %s text=%s", event_type, str(text)[:80])
+
+        # Audio delta — count chunks
+        elif "audio" in event_type and "delta" in event_type:
+            self._audio_chunks_received += 1
+            delta = event.get("delta", "")
+            logger.warning("[QWEN] <<< %s chunk #%d size=%d bytes",
+                          event_type, self._audio_chunks_received, len(delta))
+
+        # Audio done
+        elif "audio" in event_type and "done" in event_type:
+            logger.warning("[QWEN] <<< %s — total audio chunks received: %d",
+                          event_type, self._audio_chunks_received)
+
+        # Response done
+        elif event_type == "response.done":
+            response = event.get("response", {})
+            usage = response.get("usage", {})
+            logger.warning("[QWEN] <<< response.done — usage=%s generation_created=%s",
+                          usage, self._generation_created_emitted)
+            self._audio_chunks_received = 0
+
+        # All other events
+        elif event_type:
+            logger.warning("[QWEN] <<< %s", event_type)
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
-        """Use Bearer auth (not Azure's api-key header)."""
         headers = {
             "User-Agent": "LiveKit Agents",
             "Authorization": f"Bearer {self._realtime_model._opts.api_key}",
@@ -135,10 +171,12 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             logger.warning("[QWEN] WebSocket connected!")
             return ws
         except aiohttp.ClientError as e:
+            logger.error("[QWEN] Client error: %s", e)
             raise APIConnectionError(
                 "DashScope Realtime API client connection error"
             ) from e
         except asyncio.TimeoutError as e:
+            logger.error("[QWEN] Connection timed out")
             raise APIConnectionError(
                 message="DashScope Realtime API connection timed out",
             ) from e
@@ -172,10 +210,7 @@ class RealtimeModel(OpenAIRealtimeModel):
         )
         base_url = f"{base_endpoint}?model={model}"
 
-        logger.info(
-            "Initializing Qwen RealtimeModel: model=%s, voice=%s, region=%s",
-            model, voice, region,
-        )
+        logger.warning("[QWEN] Init: model=%s voice=%s region=%s", model, voice, region)
 
         super().__init__(
             model=model,
@@ -187,7 +222,6 @@ class RealtimeModel(OpenAIRealtimeModel):
             **kwargs,
         )
 
-        # Enable Azure event name mapping (DashScope uses same older names)
         self._opts.is_azure = True
 
     @property
