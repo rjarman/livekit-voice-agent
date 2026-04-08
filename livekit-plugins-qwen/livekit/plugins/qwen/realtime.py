@@ -52,10 +52,11 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
         if event_type == "session.update":
             session = event.get("session", {})
             # Fix audio format
-            if session.get("input_audio_format") == "pcm16":
-                session["input_audio_format"] = "pcm"
-            if session.get("output_audio_format") == "pcm16":
-                session["output_audio_format"] = "pcm"
+            # Keep pcm16 — DashScope Realtime API accepts it despite docs saying "pcm"
+            # The regular API uses "pcm" but the Realtime model may need "pcm16"
+            # to actually generate audio output.
+            session.setdefault("input_audio_format", "pcm16")
+            session.setdefault("output_audio_format", "pcm16")
 
             # DashScope only supports these fields in session.update:
             #   modalities, voice, instructions, input_audio_format,
@@ -75,14 +76,9 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             for k in keys_to_remove:
                 del session[k]
 
-            # Ensure audio output is always enabled
-            if "modalities" not in session and "voice" not in session:
-                # This is a tools/instructions-only update, don't touch audio
-                pass
-            else:
+            # Ensure audio modalities are always set when voice/modalities present
+            if "modalities" in session or "voice" in session:
                 session.setdefault("modalities", ["text", "audio"])
-                session.setdefault("input_audio_format", "pcm")
-                session.setdefault("output_audio_format", "pcm")
 
             logger.warning("[QWEN] >>> session.update fields=%s",
                           list(session.keys()))
