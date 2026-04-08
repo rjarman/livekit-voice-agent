@@ -689,12 +689,38 @@ async def entrypoint(ctx: JobContext) -> None:
 
     if os.environ.get("DASHSCOPE_API_KEY"):
         # --- Qwen-Omni-Realtime via DashScope (Singapore) ---
+        # DashScope's response.create only generates text, not audio.
+        # Audio is only generated via VAD (when model hears user audio).
+        # So we don't use generate_reply for greeting — the model will
+        # auto-greet when it hears the user's microphone via server_vad.
         realtime_model = QwenRealtimeModel(
             model="qwen-omni-turbo-realtime",
             voice="Cherry",
             temperature=0.7,
         )
         logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
+
+        # No Silero VAD — let DashScope's server_vad handle turn detection
+        session = AgentSession(
+            llm=realtime_model,
+        )
+
+        t_session = time.monotonic()
+        await session.start(
+            agent=BlocksSupportAgent(
+                disconnect_event=disconnect_event,
+                room=ctx.room,
+            ),
+            room=ctx.room,
+        )
+        logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
+
+        # No generate_reply — DashScope generates audio only via VAD.
+        # The greeting is in the system prompt, the model will speak it
+        # when it first detects audio from the user's microphone.
+        logger.info("[TIMING] Qwen ready, waiting for user audio to trigger greeting (total: %.2fs)",
+                   time.monotonic() - t_start)
+
     else:
         # --- OpenAI Realtime fallback ---
         realtime_model = openai.realtime.RealtimeModel(
@@ -704,36 +730,36 @@ async def entrypoint(ctx: JobContext) -> None:
         )
         logger.info("[TIMING] OpenAI RealtimeModel created (fallback) — %.2fs", time.monotonic() - t_model)
 
-    session = AgentSession(
-        llm=realtime_model,
-        vad=ctx.proc.userdata["vad"],
-    )
-
-    t_session = time.monotonic()
-    await session.start(
-        agent=BlocksSupportAgent(
-            disconnect_event=disconnect_event,
-            room=ctx.room,
-        ),
-        room=ctx.room,
-    )
-    logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
-
-    t_greet = time.monotonic()
-    await session.generate_reply(
-        instructions=(
-            "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
-            "Say exactly this greeting in Bengali first: "
-            "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
-            "Apni ki Banglay shahajjo chan naki English e?' "
-            "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
-            "Would you prefer Bengali or English?'"
+        session = AgentSession(
+            llm=realtime_model,
+            vad=ctx.proc.userdata["vad"],
         )
-    )
-    logger.info(
-        "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
-        time.monotonic() - t_greet, time.monotonic() - t_start,
-    )
+
+        t_session = time.monotonic()
+        await session.start(
+            agent=BlocksSupportAgent(
+                disconnect_event=disconnect_event,
+                room=ctx.room,
+            ),
+            room=ctx.room,
+        )
+        logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
+
+        t_greet = time.monotonic()
+        await session.generate_reply(
+            instructions=(
+                "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
+                "Say exactly this greeting in Bengali first: "
+                "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
+                "Apni ki Banglay shahajjo chan naki English e?' "
+                "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
+                "Would you prefer Bengali or English?'"
+            )
+        )
+        logger.info(
+            "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
+            time.monotonic() - t_greet, time.monotonic() - t_start,
+        )
 
     async def on_shutdown() -> None:
         disconnect_event.set()
