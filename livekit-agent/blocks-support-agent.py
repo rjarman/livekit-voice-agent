@@ -514,34 +514,42 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                 logger.info("[HANDOFF] SIP call placed, waiting for human to pick up...")
 
                 # --- Track human answer/leave ---
-                # SIP participant joins the room immediately (before phone is answered).
-                # We detect the actual answer by waiting for the participant to publish
-                # an audio track — this only happens when the call is connected.
+                # SIP participant joins the room immediately (before phone answers).
+                # track_published fires during ringing (for dialtone audio).
+                # The actual answer is detected via participant attributes:
+                # sip.callStatus changes to "active" when the phone is picked up.
                 human_answered = asyncio.Event()
                 human_left = asyncio.Event()
 
-                def _on_track_published(publication: Any, participant: Any) -> None:
-                    if (participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
-                            and publication.kind == rtc.TrackKind.KIND_AUDIO):
-                        logger.info("[HANDOFF] Human support agent ANSWERED (audio track published): %s",
-                                    participant.identity)
-                        human_answered.set()
+                def _check_sip_active(participant: Any) -> bool:
+                    """Check if SIP participant's call is active (answered)."""
+                    attrs = participant.attributes or {}
+                    status = attrs.get("sip.callStatus", "")
+                    logger.info("[HANDOFF] SIP attributes for %s: %s", participant.identity, attrs)
+                    return status == "active"
+
+                def _on_participant_attributes_changed(
+                    changed_attrs: dict, participant: Any
+                ) -> None:
+                    if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
+                        logger.info("[HANDOFF] SIP attributes changed: %s", changed_attrs)
+                        if changed_attrs.get("sip.callStatus") == "active" or _check_sip_active(participant):
+                            logger.info("[HANDOFF] Human support agent ANSWERED: %s", participant.identity)
+                            human_answered.set()
 
                 def _on_participant_disconnected(participant: Any) -> None:
                     if participant.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
                         logger.info("[HANDOFF] Human support agent LEFT: %s", participant.identity)
                         human_left.set()
 
-                self._room.on("track_published", _on_track_published)
+                self._room.on("participant_attributes_changed", _on_participant_attributes_changed)
                 self._room.on("participant_disconnected", _on_participant_disconnected)
 
-                # Check if already answered (has audio track)
+                # Check if already answered
                 for p in self._room.remote_participants.values():
                     if p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX):
-                        for pub in p.track_publications.values():
-                            if pub.kind == rtc.TrackKind.KIND_AUDIO:
-                                human_answered.set()
-                                break
+                        if _check_sip_active(p):
+                            human_answered.set()
 
                 # Wait up to 60s for human to actually answer the phone
                 try:
