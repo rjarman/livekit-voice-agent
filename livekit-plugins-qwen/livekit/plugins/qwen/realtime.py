@@ -57,12 +57,32 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             if session.get("output_audio_format") == "pcm16":
                 session["output_audio_format"] = "pcm"
 
-            # DashScope treats None/null fields as "disable" rather than "keep existing".
-            # Remove None fields so subsequent session.update calls don't
-            # accidentally disable audio output by sending voice=null, modalities=null.
-            keys_to_remove = [k for k, v in session.items() if v is None]
+            # DashScope only supports these fields in session.update:
+            #   modalities, voice, instructions, input_audio_format,
+            #   output_audio_format, turn_detection, tools, tool_choice,
+            #   enable_search, search_options
+            # All other fields (model, speed, input_audio_transcription, etc.)
+            # cause DashScope to silently fall back to text-only output.
+            ALLOWED_FIELDS = {
+                "modalities", "voice", "instructions", "input_audio_format",
+                "output_audio_format", "turn_detection", "tools", "tool_choice",
+                "enable_search", "search_options",
+            }
+            keys_to_remove = [
+                k for k in session
+                if k not in ALLOWED_FIELDS or session[k] is None
+            ]
             for k in keys_to_remove:
                 del session[k]
+
+            # Ensure audio output is always enabled
+            if "modalities" not in session and "voice" not in session:
+                # This is a tools/instructions-only update, don't touch audio
+                pass
+            else:
+                session.setdefault("modalities", ["text", "audio"])
+                session.setdefault("input_audio_format", "pcm")
+                session.setdefault("output_audio_format", "pcm")
 
             logger.warning("[QWEN] >>> session.update fields=%s",
                           list(session.keys()))
