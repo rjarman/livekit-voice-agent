@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "qdrant-client>=1.9.0",
     "openai>=1.30.0",
+    "livekit-plugins-aliyun>=0.1.0",
 ]
 
 [dependency-groups]
