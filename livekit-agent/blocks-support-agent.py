@@ -432,34 +432,22 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
 
         self._handoff_active = True
 
-        # Tell the customer to wait via session.say() — direct TTS, no model involved
-        try:
-            if self._language == "bn":
-                speech = await context.session.say(
-                    "Ektu opekkha korun, ami apnake ekjon support agent er shathe connect korchhi.",
-                    allow_interruptions=False,
-                )
-            else:
-                speech = await context.session.say(
-                    "Please wait while I connect you with a human support agent.",
-                    allow_interruptions=False,
-                )
-            await speech.join()
-        except Exception as e:
-            logger.error("[HANDOFF] Failed to say wait message: %s", e)
-
-        # Interrupt any model speech and mute so it cannot speak during handoff
-        try:
-            await context.session.interrupt()
-        except Exception:
-            pass
-        self._set_agent_deaf_mute(deaf=False, mute=True)
-
-        # Place SIP call to human support in the background
+        # Place SIP call to human support in the background.
+        # The background task will mute the agent after a short delay.
         asyncio.create_task(self._connect_human_support(context, summary))
 
-        # Return minimal response — agent is already muted so model can't speak
-        return "Transfer initiated. Stay completely silent."
+        # Return instruction for the model to speak — it will say "please wait"
+        # then the background task mutes it before it can say anything else.
+        if self._language == "bn":
+            return (
+                "Say exactly this and nothing else: "
+                "'Ektu opekkha korun, ami apnake ekjon support agent er shathe connect korchhi.'"
+            )
+        else:
+            return (
+                "Say exactly this and nothing else: "
+                "'Please wait while I connect you with a human support agent.'"
+            )
 
     def _set_agent_deaf_mute(self, deaf: bool, mute: bool) -> None:
         """Control the agent's audio input (deaf) and output (mute).
@@ -488,6 +476,15 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
     async def _connect_human_support(self, context: RunContext, summary: str) -> None:
         """Place SIP call to human support, manage handoff lifecycle."""
         room_name = self._room.name
+
+        # Wait for model to finish speaking "please wait", then mute it
+        await asyncio.sleep(5)
+        try:
+            await context.session.interrupt()
+        except Exception:
+            pass
+        self._set_agent_deaf_mute(deaf=False, mute=True)
+        logger.info("[HANDOFF] Agent muted after 'please wait' message")
 
         try:
             lk_url = LIVEKIT_URL.replace("ws://", "http://").replace("wss://", "https://")
@@ -555,21 +552,24 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                 session = context.session
                 try:
                     if self._language == "bn":
-                        speech = await session.say(
-                            f"Customer er somossa holo: {summary}.",
-                            allow_interruptions=False,
+                        await session.generate_reply(
+                            instructions=f"Say exactly this and nothing else: 'Customer er somossa holo: {summary}.'",
                         )
                     else:
-                        speech = await session.say(
-                            f"The customer needs help with: {summary}.",
-                            allow_interruptions=False,
+                        await session.generate_reply(
+                            instructions=f"Say exactly this and nothing else: 'The customer needs help with: {summary}.'",
                         )
-                    await speech.join()
+                    # Wait for speech to finish
+                    await asyncio.sleep(4)
                     logger.info("[HANDOFF] Summary delivered to human agent")
                 except Exception as e:
                     logger.error("[HANDOFF] Failed to deliver summary: %s", e)
 
-                # Go deaf+mute for the duration of the human-customer conversation
+                # Interrupt any leftover speech, then go deaf+mute
+                try:
+                    await session.interrupt()
+                except Exception:
+                    pass
                 logger.info("[HANDOFF] Agent going deaf+mute during handoff")
                 self._set_agent_deaf_mute(deaf=True, mute=True)
 
@@ -590,18 +590,21 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
 
         try:
             session = context.session
-            logger.info("[HANDOFF] Resuming with session.say() (lang=%s)", self._language)
+            logger.info("[HANDOFF] Resuming with generate_reply (lang=%s)", self._language)
             if self._language == "bn":
-                speech = await session.say(
-                    "Human support agent call chere diyechen. Apnar aar kono proshno thakle amake bolun.",
-                    allow_interruptions=False,
+                await session.generate_reply(
+                    instructions=(
+                        "Say exactly this and nothing else: "
+                        "'Human support agent call chere diyechen. Apnar aar kono proshno thakle amake bolun.'"
+                    ),
                 )
             else:
-                speech = await session.say(
-                    "The human support agent has disconnected. Let me know if you have any other questions.",
-                    allow_interruptions=False,
+                await session.generate_reply(
+                    instructions=(
+                        "Say exactly this and nothing else: "
+                        "'The human support agent has disconnected. Let me know if you have any other questions.'"
+                    ),
                 )
-            await speech.join()
             logger.info("[HANDOFF] Resume message delivered")
         except Exception as e:
             logger.error("[HANDOFF] Failed to resume agent: %s", e)
