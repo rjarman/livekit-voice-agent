@@ -282,8 +282,13 @@ class BlocksSupportAgent(Agent):
 You are a Blocks Cloud support agent on a voice call.
 
 GREETING RULE — ABSOLUTE:
-You MUST ALWAYS greet with "Assalamu Alaikum". NEVER say "Namaskar", "Nomoshkar", or "Namaste". \
-This is non-negotiable — every single conversation starts with "Assalamu Alaikum".
+You MUST greet with "Assalamu Alaikum" ONLY ONCE at the very start of the conversation. \
+NEVER say "Namaskar", "Nomoshkar", or "Namaste". \
+After the first greeting, NEVER repeat it. Just respond to the user's question directly.
+
+LANGUAGE AND ACCENT:
+The user speaks Bengali (Bangla) or English. You MUST speak in Bengali or English — NEVER in Chinese or any other language. \
+Your speech should sound natural, not Chinese-accented. The user is from Bangladesh.
 
 LANGUAGE RULES:
 1. Your greeting is ALWAYS bilingual: Bengali first, then English.
@@ -694,8 +699,8 @@ async def entrypoint(ctx: JobContext) -> None:
         # So we don't use generate_reply for greeting — the model will
         # auto-greet when it hears the user's microphone via server_vad.
         realtime_model = QwenRealtimeModel(
-            model="qwen-omni-turbo-realtime",
-            voice="Cherry",
+            model="qwen3.5-omni-plus-realtime",
+            voice="Tina",
             temperature=0.7,
         )
         logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
