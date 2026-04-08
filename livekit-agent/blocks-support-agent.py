@@ -32,7 +32,8 @@ from livekit.agents import (
     AutoSubscribe,
     function_tool,
 )
-from livekit.plugins import openai, silero, aliyun
+from livekit.plugins import openai, silero
+from livekit.plugins.qwen import RealtimeModel as QwenRealtimeModel
 
 load_dotenv()
 
@@ -687,50 +688,13 @@ async def entrypoint(ctx: JobContext) -> None:
     t_model = time.monotonic()
 
     if os.environ.get("DASHSCOPE_API_KEY"):
-        # --- Qwen via DashScope (separate STT+LLM+TTS pipeline) ---
-        # Uses livekit-plugins-aliyun which handles DashScope protocol natively.
-        # LLM uses OpenAI-compatible API; override base_url for Singapore.
-        import httpx
-        import openai as oai_lib
-
-        dashscope_key = os.environ["DASHSCOPE_API_KEY"]
-
-        qwen_stt = aliyun.STT(
-            language="bn",
-            detect_language=True,
-            model="paraformer-realtime-v2",
-            api_key=dashscope_key,
-        )
-
-        qwen_llm = aliyun.LLM(
-            model="qwen-omni-turbo",
-            api_key=dashscope_key,
-            client=oai_lib.AsyncClient(
-                api_key=dashscope_key,
-                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-                max_retries=0,
-                http_client=httpx.AsyncClient(
-                    timeout=httpx.Timeout(connect=15.0, read=30.0, write=5.0, pool=5.0),
-                    follow_redirects=True,
-                ),
-            ),
+        # --- Qwen-Omni-Realtime via DashScope (Singapore) ---
+        realtime_model = QwenRealtimeModel(
+            model="qwen-omni-turbo-realtime",
+            voice="Cherry",
             temperature=0.7,
         )
-
-        qwen_tts = aliyun.TTS(
-            voice="Cherry",
-            model="cosyvoice-v2",
-            api_key=dashscope_key,
-        )
-
-        logger.info("[TIMING] Qwen STT+LLM+TTS pipeline created — %.2fs", time.monotonic() - t_model)
-
-        session = AgentSession(
-            stt=qwen_stt,
-            llm=qwen_llm,
-            tts=qwen_tts,
-            vad=ctx.proc.userdata["vad"],
-        )
+        logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
     else:
         # --- OpenAI Realtime fallback ---
         realtime_model = openai.realtime.RealtimeModel(
@@ -740,10 +704,10 @@ async def entrypoint(ctx: JobContext) -> None:
         )
         logger.info("[TIMING] OpenAI RealtimeModel created (fallback) — %.2fs", time.monotonic() - t_model)
 
-        session = AgentSession(
-            llm=realtime_model,
-            vad=ctx.proc.userdata["vad"],
-        )
+    session = AgentSession(
+        llm=realtime_model,
+        vad=ctx.proc.userdata["vad"],
+    )
 
     t_session = time.monotonic()
     await session.start(
@@ -756,14 +720,18 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
 
     t_greet = time.monotonic()
-    await session.say(
-        "Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
-        "Apni ki Banglay shahajjo chan naki English e? "
-        "Welcome! I am your Blocks Cloud support assistant. "
-        "Would you prefer Bengali or English?"
+    await session.generate_reply(
+        instructions=(
+            "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
+            "Say exactly this greeting in Bengali first: "
+            "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
+            "Apni ki Banglay shahajjo chan naki English e?' "
+            "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
+            "Would you prefer Bengali or English?'"
+        )
     )
     logger.info(
-        "[TIMING] greeting say — %.2fs (total from start: %.2fs)",
+        "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
         time.monotonic() - t_greet, time.monotonic() - t_start,
     )
 

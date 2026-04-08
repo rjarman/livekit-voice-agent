@@ -1,11 +1,12 @@
 """
 Qwen-Omni-Realtime plugin for LiveKit Agents.
 
-DashScope differences from OpenAI/Azure:
-    1. Event names: same as Azure (older format) — handled by is_azure=True
+Handles DashScope protocol differences from OpenAI:
+    1. Event names: same as Azure (older format) — is_azure=True
     2. Auth: Bearer token (not Azure's api-key header)
     3. Audio format: "pcm" (not "pcm16")
-    4. URL: DashScope Singapore endpoint with ?model= parameter
+    4. Metadata: DashScope doesn't echo response.create metadata —
+       we inject client_event_id to resolve generate_reply futures
 
 Supported models:
     - qwen-omni-turbo-realtime
@@ -14,15 +15,9 @@ Supported models:
     - qwen3.5-omni-flash-realtime
     - qwen3.5-omni-plus-realtime
 
-Voices: Cherry, Ethan, Tina, and 52 more
-
 Usage:
     from livekit.plugins.qwen import RealtimeModel
-
-    model = RealtimeModel(
-        model="qwen-omni-turbo-realtime",
-        voice="Cherry",
-    )
+    model = RealtimeModel(model="qwen-omni-turbo-realtime", voice="Cherry")
     session = AgentSession(llm=model, vad=vad)
 """
 
@@ -49,43 +44,51 @@ DEFAULT_MODEL = "qwen-omni-turbo-realtime"
 DEFAULT_VOICE = "Cherry"
 
 
-def _fix_dashscope_event(event: dict[str, Any]) -> None:
-    """In-place fix of outgoing events for DashScope compatibility.
-
-    DashScope expects "pcm" audio format, Azure sends "pcm16".
-    """
-    event_type = event.get("type", "")
-    if event_type == "session.update":
-        session = event.get("session", {})
-        if session.get("input_audio_format") == "pcm16":
-            session["input_audio_format"] = "pcm"
-        if session.get("output_audio_format") == "pcm16":
-            session["output_audio_format"] = "pcm"
-        logger.warning("[QWEN] Fixed session.update: audio_format=%s, voice=%s, modalities=%s",
-                      session.get("input_audio_format"), session.get("voice"), session.get("modalities"))
-    elif event_type != "input_audio_buffer.append":
-        # Log all non-audio events for debugging
-        logger.warning("[QWEN] Outgoing event: %s", event_type)
-
-
 class QwenRealtimeSession(OpenAIRealtimeSession):
-    """Session with DashScope-specific auth and audio format handling."""
+    """Session with DashScope-specific fixes."""
 
     def __init__(self, realtime_model: "RealtimeModel") -> None:
         super().__init__(realtime_model)
-        # Listen to outgoing events and fix format before they're sent
-        self.on("openai_client_event_queued", _fix_dashscope_event)
-        # Log incoming events for debugging
-        self.on("openai_server_event_received", self._log_server_event)
+        self._last_response_create_event_id: str | None = None
+        # Fix outgoing events
+        self.on("openai_client_event_queued", self._fix_outgoing)
+        # Fix incoming events
+        self.on("openai_server_event_received", self._fix_incoming)
 
-    @staticmethod
-    def _log_server_event(event: dict) -> None:
-        event_type = event.get("type", "unknown")
-        if event_type not in ("input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped"):
-            if "audio" in event_type and "delta" in event_type:
-                logger.debug("[QWEN] <<< %s (audio data)", event_type)
-            else:
-                logger.warning("[QWEN] <<< %s", event_type)
+    def _fix_outgoing(self, event: dict[str, Any]) -> None:
+        """Fix outgoing events for DashScope compatibility."""
+        event_type = event.get("type", "")
+
+        # Fix audio format: Azure sends "pcm16", DashScope expects "pcm"
+        if event_type == "session.update":
+            session = event.get("session", {})
+            if session.get("input_audio_format") == "pcm16":
+                session["input_audio_format"] = "pcm"
+            if session.get("output_audio_format") == "pcm16":
+                session["output_audio_format"] = "pcm"
+
+        # Track response.create event_id for metadata injection
+        elif event_type == "response.create":
+            resp = event.get("response", {})
+            metadata = resp.get("metadata", {})
+            if isinstance(metadata, dict):
+                self._last_response_create_event_id = metadata.get("client_event_id")
+
+    def _fix_incoming(self, event: dict[str, Any]) -> None:
+        """Fix incoming events for DashScope compatibility."""
+        event_type = event.get("type", "")
+
+        # DashScope doesn't echo metadata from response.create.
+        # The OpenAI plugin needs client_event_id in response.created
+        # to resolve generate_reply futures. We inject it.
+        if event_type == "response.created" and self._last_response_create_event_id:
+            response = event.get("response", {})
+            if not isinstance(response.get("metadata"), dict):
+                response["metadata"] = {}
+            if "client_event_id" not in response["metadata"]:
+                response["metadata"]["client_event_id"] = self._last_response_create_event_id
+                logger.info("[QWEN] Injected client_event_id into response.created")
+            self._last_response_create_event_id = None
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
         """Use Bearer auth (not Azure's api-key header)."""
@@ -114,12 +117,10 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             logger.warning("[QWEN] WebSocket connected!")
             return ws
         except aiohttp.ClientError as e:
-            logger.error("[QWEN] Client error: %s", e)
             raise APIConnectionError(
                 "DashScope Realtime API client connection error"
             ) from e
         except asyncio.TimeoutError as e:
-            logger.error("[QWEN] Connection timed out")
             raise APIConnectionError(
                 message="DashScope Realtime API connection timed out",
             ) from e
@@ -176,7 +177,6 @@ class RealtimeModel(OpenAIRealtimeModel):
         return "qwen"
 
     def session(self) -> QwenRealtimeSession:
-        """Create a QwenRealtimeSession with correct auth and format handling."""
         sess = QwenRealtimeSession(self)
         self._sessions.add(sess)
         return sess
