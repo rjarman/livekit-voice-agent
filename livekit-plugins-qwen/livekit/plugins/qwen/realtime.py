@@ -54,6 +54,8 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
         """Override to use Bearer auth instead of Azure's api-key header."""
+        logger.warning("[QWEN] _create_ws_conn called — using Bearer auth")
+
         headers = {
             "User-Agent": "LiveKit Agents",
             "Authorization": f"Bearer {self._realtime_model._opts.api_key}",
@@ -67,20 +69,24 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             azure_deployment=self._realtime_model._opts.azure_deployment,
         )
 
-        logger.info("Connecting to DashScope Realtime: %s", url)
+        logger.warning("[QWEN] Connecting to: %s", url)
 
         try:
-            return await asyncio.wait_for(
+            ws = await asyncio.wait_for(
                 self._realtime_model._ensure_http_session().ws_connect(
                     url=url, headers=headers
                 ),
                 self._realtime_model._opts.conn_options.timeout,
             )
+            logger.warning("[QWEN] WebSocket connected successfully!")
+            return ws
         except aiohttp.ClientError as e:
+            logger.error("[QWEN] Client error: %s", e)
             raise APIConnectionError(
                 "DashScope Realtime API client connection error"
             ) from e
         except asyncio.TimeoutError as e:
+            logger.error("[QWEN] Connection timed out")
             raise APIConnectionError(
                 message="DashScope Realtime API connection timed out",
             ) from e
