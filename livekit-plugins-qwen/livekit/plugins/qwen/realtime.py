@@ -1,7 +1,8 @@
 """
-Qwen-Omni-Realtime plugin for LiveKit Agents — DEBUG VERSION.
+Qwen-Omni-Realtime plugin for LiveKit Agents.
 
-Handles DashScope protocol differences from OpenAI with extensive logging.
+Handles DashScope protocol differences from OpenAI.
+Supports both qwen-omni-turbo-realtime and qwen3.5-omni-* models.
 """
 
 import asyncio
@@ -27,6 +28,21 @@ DASHSCOPE_CN_BASE_URL = "https://dashscope.aliyuncs.com/api-ws/v1/realtime"
 DEFAULT_MODEL = "qwen-omni-turbo-realtime"
 DEFAULT_VOICE = "Cherry"
 
+# Fields accepted by DashScope session.update (turbo models)
+_TURBO_ALLOWED_FIELDS = {
+    "modalities", "voice", "instructions", "input_audio_format",
+    "output_audio_format", "turn_detection",
+    "enable_search", "search_options",
+}
+
+# qwen3/qwen3.5 models are stricter — only these fields are safe.
+# turn_detection causes immediate disconnect on qwen3+ models;
+# the server uses its own VAD by default.
+_QWEN3_ALLOWED_FIELDS = {
+    "modalities", "voice", "instructions",
+    "input_audio_format", "output_audio_format",
+}
+
 
 class QwenRealtimeSession(OpenAIRealtimeSession):
     """Session with DashScope-specific fixes and debug logging."""
@@ -36,65 +52,57 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
         self._last_response_create_event_id: str | None = None
         self._audio_chunks_received = 0
         self._generation_created_emitted = False
+        self._model_name: str = realtime_model._opts.model
+        self._is_qwen3: bool = "qwen3" in self._model_name
         self.on("openai_client_event_queued", self._fix_outgoing)
         self.on("openai_server_event_received", self._fix_incoming)
-        # Also monitor generation events
         self.on("generation_created", self._on_generation_created)
 
     def _on_generation_created(self, event: Any) -> None:
         self._generation_created_emitted = True
-        logger.warning("[QWEN] generation_created emitted! user_initiated=%s",
-                      getattr(event, 'user_initiated', 'unknown'))
+        logger.info("[QWEN] generation_created emitted! user_initiated=%s",
+                    getattr(event, 'user_initiated', 'unknown'))
 
     def _fix_outgoing(self, event: dict[str, Any]) -> None:
         event_type = event.get("type", "")
 
         if event_type == "session.update":
             session = event.get("session", {})
-            # Fix audio format
-            # DashScope expects pcm format
+
+            # DashScope requires "pcm", not "pcm16" (Azure default)
             session["input_audio_format"] = "pcm"
             session["output_audio_format"] = "pcm"
 
-            # DashScope only supports these fields in session.update:
-            #   modalities, voice, instructions, input_audio_format,
-            #   output_audio_format, turn_detection, tools, tool_choice,
-            #   enable_search, search_options
-            # All other fields (model, speed, input_audio_transcription, etc.)
-            # cause DashScope to silently fall back to text-only output.
-            # Qwen 3.5 models are strict — only accept these fields.
-            # "tools" causes 3.5 models to close the connection immediately.
-            # Tools are sent separately after the session is established.
-            ALLOWED_FIELDS = {
-                "modalities", "voice", "instructions", "input_audio_format",
-                "output_audio_format", "turn_detection",
-                "enable_search", "search_options", "temperature",
-            }
+            # Pick allowed fields based on model family
+            allowed = _QWEN3_ALLOWED_FIELDS if self._is_qwen3 else _TURBO_ALLOWED_FIELDS
+
+            # Remove disallowed or None-valued fields
             keys_to_remove = [
                 k for k in session
-                if k not in ALLOWED_FIELDS or session[k] is None
+                if k not in allowed or session[k] is None
             ]
             for k in keys_to_remove:
                 del session[k]
 
-            # Ensure audio modalities are always set when voice/modalities present
+            # Ensure audio modalities when voice is present
             if "modalities" in session or "voice" in session:
                 session.setdefault("modalities", ["text", "audio"])
 
-            # Force DashScope-compatible turn_detection format
-            td = session.get("turn_detection")
-            if td is not None and isinstance(td, dict):
-                session["turn_detection"] = {
-                    "type": "server_vad",
-                    "threshold": td.get("threshold", 0.5),
-                    "silence_duration_ms": td.get("silence_duration_ms", 800),
-                }
-            elif td is None and "turn_detection" in session:
-                # If explicitly set to None, remove it and use default
-                del session["turn_detection"]
+            # Clean up turn_detection for turbo models (strip unsupported sub-fields)
+            if not self._is_qwen3:
+                td = session.get("turn_detection")
+                if td is not None and isinstance(td, dict):
+                    session["turn_detection"] = {
+                        "type": "server_vad",
+                        "threshold": td.get("threshold", 0.5),
+                        "silence_duration_ms": td.get("silence_duration_ms", 800),
+                    }
+                elif td is None and "turn_detection" in session:
+                    del session["turn_detection"]
 
-            logger.warning("[QWEN] >>> session.update fields=%s",
-                          list(session.keys()))
+            # Log full event JSON for debugging
+            logger.info("[QWEN] >>> session.update FULL: %s",
+                        json.dumps({"session": session}, ensure_ascii=False)[:2000])
 
         elif event_type == "response.create":
             # Track client_event_id before stripping
@@ -103,14 +111,13 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             if isinstance(metadata, dict):
                 self._last_response_create_event_id = metadata.get("client_event_id")
 
-            # DashScope's response.create only supports type + event_id.
-            # The OpenAI "response" object (instructions, metadata, modalities)
-            # is NOT supported and causes DashScope to fall back to text-only.
+            # DashScope response.create only supports type + event_id.
+            # The "response" object causes text-only fallback.
             if "response" in event:
                 del event["response"]
 
-            logger.warning("[QWEN] >>> response.create (stripped response obj) event_id=%s",
-                          event.get("event_id"))
+            logger.info("[QWEN] >>> response.create (stripped response obj) event_id=%s",
+                        event.get("event_id"))
 
         elif event_type == "input_audio_buffer.append":
             # Resample 24kHz → 16kHz for DashScope (expects 16kHz input)
@@ -121,11 +128,9 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                 raw = base64.b64decode(audio_b64)
                 # Simple 3:2 downsampling (24kHz → 16kHz)
                 samples = struct.unpack(f"<{len(raw)//2}h", raw)
-                # Take every 2 out of 3 samples (linear interpolation approximation)
                 resampled = []
                 for i in range(0, len(samples) - 2, 3):
                     resampled.append(samples[i])
-                    # Interpolate between samples[i+1] and samples[i+2]
                     resampled.append((samples[i+1] + samples[i+2]) // 2)
                 resampled_bytes = struct.pack(f"<{len(resampled)}h", *resampled)
                 event["audio"] = base64.b64encode(resampled_bytes).decode()
@@ -133,84 +138,70 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             if not hasattr(self, '_audio_send_count'):
                 self._audio_send_count = 0
             self._audio_send_count += 1
-            if self._audio_send_count <= 3 or self._audio_send_count % 50 == 0:
-                logger.warning("[QWEN] >>> input_audio_buffer.append #%d size=%d (resampled 24k→16k)",
-                              self._audio_send_count, len(event.get("audio", "")))
+            if self._audio_send_count <= 3 or self._audio_send_count % 100 == 0:
+                logger.debug("[QWEN] >>> input_audio_buffer.append #%d size=%d (resampled 24k→16k)",
+                             self._audio_send_count, len(event.get("audio", "")))
         else:
-            logger.warning("[QWEN] >>> %s", event_type)
+            logger.debug("[QWEN] >>> %s", event_type)
 
     def _fix_incoming(self, event: dict[str, Any]) -> None:
         event_type = event.get("type", "")
 
-        # Fix 1: Inject client_event_id
         if event_type == "response.created":
             response = event.get("response", {})
             response_id = response.get("id", "unknown")
-            has_metadata = isinstance(response.get("metadata"), dict)
 
             if self._last_response_create_event_id:
-                if not has_metadata:
+                if not isinstance(response.get("metadata"), dict):
                     response["metadata"] = {}
                 if "client_event_id" not in response.get("metadata", {}):
                     response["metadata"]["client_event_id"] = self._last_response_create_event_id
-                    logger.warning("[QWEN] <<< response.created id=%s — INJECTED client_event_id=%s",
-                                  response_id, self._last_response_create_event_id)
+                    logger.info("[QWEN] <<< response.created id=%s — injected client_event_id=%s",
+                                response_id, self._last_response_create_event_id)
                 self._last_response_create_event_id = None
             else:
-                logger.warning("[QWEN] <<< response.created id=%s — no pending event_id to inject",
-                              response_id)
+                logger.info("[QWEN] <<< response.created id=%s", response_id)
 
-        # Fix 2: output_item.added
         elif event_type == "response.output_item.added":
             item = event.get("item", {})
             if "object" not in item:
                 item["object"] = "realtime.item"
-            logger.warning("[QWEN] <<< response.output_item.added id=%s type=%s object=%s",
-                          item.get("id"), item.get("type"), item.get("object"))
+            logger.debug("[QWEN] <<< response.output_item.added id=%s type=%s",
+                         item.get("id"), item.get("type"))
 
-        # Fix 3: content_part.added
         elif event_type == "response.content_part.added":
             part = event.get("part", {})
             if "type" not in part and "audio" in str(event):
                 part["type"] = "audio"
-            logger.warning("[QWEN] <<< response.content_part.added part_type=%s item_id=%s",
-                          part.get("type"), event.get("item_id"))
+            logger.debug("[QWEN] <<< response.content_part.added part_type=%s",
+                         part.get("type"))
 
-        # Fix 4: output_item.done
         elif event_type == "response.output_item.done":
             item = event.get("item", {})
             if "object" not in item:
                 item["object"] = "realtime.item"
-            logger.warning("[QWEN] <<< response.output_item.done id=%s", item.get("id"))
 
-        # Audio transcript events
         elif "audio_transcript" in event_type:
             text = event.get("delta", event.get("transcript", ""))
-            logger.warning("[QWEN] <<< %s text=%s", event_type, str(text)[:80])
+            logger.info("[QWEN] <<< %s text=%s", event_type, str(text)[:80])
 
-        # Audio delta — count chunks
         elif "audio" in event_type and "delta" in event_type:
             self._audio_chunks_received += 1
-            delta = event.get("delta", "")
-            logger.warning("[QWEN] <<< %s chunk #%d size=%d bytes",
-                          event_type, self._audio_chunks_received, len(delta))
+            if self._audio_chunks_received <= 3 or self._audio_chunks_received % 50 == 0:
+                logger.debug("[QWEN] <<< %s chunk #%d", event_type, self._audio_chunks_received)
 
-        # Audio done
-        elif "audio" in event_type and "done" in event_type:
-            logger.warning("[QWEN] <<< %s — total audio chunks received: %d",
-                          event_type, self._audio_chunks_received)
-
-        # Response done
         elif event_type == "response.done":
             response = event.get("response", {})
             usage = response.get("usage", {})
-            logger.warning("[QWEN] <<< response.done — usage=%s generation_created=%s",
-                          usage, self._generation_created_emitted)
+            logger.info("[QWEN] <<< response.done — usage=%s audio_chunks=%d",
+                        usage, self._audio_chunks_received)
             self._audio_chunks_received = 0
 
-        # All other events
+        elif event_type == "error":
+            logger.error("[QWEN] <<< ERROR: %s", json.dumps(event, ensure_ascii=False))
+
         elif event_type:
-            logger.warning("[QWEN] <<< %s", event_type)
+            logger.debug("[QWEN] <<< %s", event_type)
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
         headers = {
@@ -226,7 +217,8 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             azure_deployment=self._realtime_model._opts.azure_deployment,
         )
 
-        logger.warning("[QWEN] Connecting to: %s", url)
+        logger.info("[QWEN] Connecting to: %s (model=%s, is_qwen35=%s)",
+                    url, self._model_name, self._is_qwen3)
 
         try:
             ws = await asyncio.wait_for(
@@ -235,7 +227,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                 ),
                 self._realtime_model._opts.conn_options.timeout,
             )
-            logger.warning("[QWEN] WebSocket connected!")
+            logger.info("[QWEN] WebSocket connected!")
             return ws
         except aiohttp.ClientError as e:
             logger.error("[QWEN] Client error: %s", e)
@@ -277,7 +269,8 @@ class RealtimeModel(OpenAIRealtimeModel):
         )
         base_url = f"{base_endpoint}?model={model}"
 
-        logger.warning("[QWEN] Init: model=%s voice=%s region=%s", model, voice, region)
+        logger.info("[QWEN] Init: model=%s voice=%s region=%s is_qwen3=%s",
+                    model, voice, region, "qwen3" in model)
 
         super().__init__(
             model=model,
@@ -289,6 +282,9 @@ class RealtimeModel(OpenAIRealtimeModel):
             **kwargs,
         )
 
+        # Azure mode prevents the OpenAI plugin from appending /realtime?model=
+        # to our already-complete URL, and uses the flat session format that
+        # DashScope expects.
         self._opts.is_azure = True
 
     @property

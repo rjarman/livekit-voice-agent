@@ -207,6 +207,8 @@ services:
       QDRANT_API_KEY: ${QDRANT_API_KEY}
       DOCS_DIR: /app/docs/cloud
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen3-omni-flash-realtime}
+      QWEN_VOICE: ${QWEN_VOICE:-Tina}
       SUPPORT_PHONE_NUMBER: ${SUPPORT_PHONE_NUMBER:-}
       SUPPORT_SIP_TRUNK_ID: ${SUPPORT_SIP_TRUNK_ID:-}
     depends_on:

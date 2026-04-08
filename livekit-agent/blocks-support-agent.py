@@ -692,20 +692,25 @@ async def entrypoint(ctx: JobContext) -> None:
 
     t_model = time.monotonic()
 
-    if os.environ.get("DASHSCOPE_API_KEY"):
+    voice_provider = os.getenv("VOICE_PROVIDER", "openai")  # "openai" or "qwen"
+
+    if voice_provider == "qwen" and os.environ.get("DASHSCOPE_API_KEY"):
         # --- Qwen-Omni-Realtime via DashScope (Singapore) ---
-        # DashScope's response.create only generates text, not audio.
-        # Audio is only generated via VAD (when model hears user audio).
-        # So we don't use generate_reply for greeting — the model will
-        # auto-greet when it hears the user's microphone via server_vad.
+        # NOTE: Qwen realtime does NOT support function calling.
+        # RAG (search_docs), handoff, and end_call will not work.
+        # Use only when Qwen gets function calling or for voice-only mode.
+        #
+        # Bengali STT requires qwen3.5-omni (needs API activation).
+        # qwen3-omni-flash-realtime works but only 19 languages (no Bengali).
+        qwen_model = os.getenv("QWEN_MODEL", "qwen3-omni-flash-realtime")
+        qwen_voice = os.getenv("QWEN_VOICE", "Tina")
         realtime_model = QwenRealtimeModel(
-            model="qwen3.5-omni-flash-realtime",
-            voice="Tina",
+            model=qwen_model,
+            voice=qwen_voice,
             temperature=0.7,
         )
         logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
-        # Silero VAD needed — LiveKit uses it to push audio frames to the model
         session = AgentSession(
             llm=realtime_model,
             vad=ctx.proc.userdata["vad"],
@@ -720,21 +725,17 @@ async def entrypoint(ctx: JobContext) -> None:
             room=ctx.room,
         )
         logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
-
-        # No generate_reply — DashScope generates audio only via VAD.
-        # The greeting is in the system prompt, the model will speak it
-        # when it first detects audio from the user's microphone.
-        logger.info("[TIMING] Qwen ready, waiting for user audio to trigger greeting (total: %.2fs)",
-                   time.monotonic() - t_start)
+        logger.info("[TIMING] Qwen ready (total: %.2fs)", time.monotonic() - t_start)
 
     else:
-        # --- OpenAI Realtime fallback ---
+        # --- OpenAI Realtime (default) ---
+        # Supports function calling → RAG, handoff, end_call all work.
         realtime_model = openai.realtime.RealtimeModel(
             model="gpt-realtime-1.5",
-            voice="marin",
+            voice="coral",
             temperature=0.7,
         )
-        logger.info("[TIMING] OpenAI RealtimeModel created (fallback) — %.2fs", time.monotonic() - t_model)
+        logger.info("[TIMING] OpenAI RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
         session = AgentSession(
             llm=realtime_model,
