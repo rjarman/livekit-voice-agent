@@ -88,12 +88,20 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                           list(session.keys()))
 
         elif event_type == "response.create":
+            # Track client_event_id before stripping
             resp = event.get("response", {})
-            metadata = resp.get("metadata", {})
+            metadata = resp.get("metadata", {}) if isinstance(resp, dict) else {}
             if isinstance(metadata, dict):
                 self._last_response_create_event_id = metadata.get("client_event_id")
-            logger.warning("[QWEN] >>> response.create event_id=%s client_event_id=%s",
-                          event.get("event_id"), self._last_response_create_event_id)
+
+            # DashScope's response.create only supports type + event_id.
+            # The OpenAI "response" object (instructions, metadata, modalities)
+            # is NOT supported and causes DashScope to fall back to text-only.
+            if "response" in event:
+                del event["response"]
+
+            logger.warning("[QWEN] >>> response.create (stripped response obj) event_id=%s",
+                          event.get("event_id"))
 
         elif event_type == "input_audio_buffer.append":
             pass  # Don't log audio data
