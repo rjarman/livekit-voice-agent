@@ -448,7 +448,11 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
         except Exception as e:
             logger.error("[HANDOFF] Failed to say wait message: %s", e)
 
-        # Mute agent immediately so the model cannot speak during handoff
+        # Interrupt any model speech and mute so it cannot speak during handoff
+        try:
+            await context.session.interrupt()
+        except Exception:
+            pass
         self._set_agent_deaf_mute(deaf=False, mute=True)
 
         # Place SIP call to human support in the background
@@ -461,7 +465,7 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
         """Control the agent's audio input (deaf) and output (mute).
 
         deaf=True:  unsubscribe from all remote audio tracks (agent can't hear)
-        mute=True:  mute all published audio tracks (agent can't speak)
+        mute=True:  mute the local audio track (agent can't speak)
         """
         # Deaf: unsubscribe from remote participants' audio tracks
         for participant in self._room.remote_participants.values():
@@ -470,15 +474,14 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                     if isinstance(pub, rtc.RemoteTrackPublication):
                         pub.set_subscribed(not deaf)
 
-        # Mute: mute local audio tracks
+        # Mute: mute the actual LocalAudioTrack (not the publication)
         local = self._room.local_participant
         for pub in local.track_publications.values():
-            if pub.kind == rtc.TrackKind.KIND_AUDIO:
-                if hasattr(pub, 'mute') and callable(pub.mute):
-                    if mute:
-                        pub.mute()
-                    else:
-                        pub.unmute()
+            if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track:
+                if mute:
+                    pub.track.mute()
+                else:
+                    pub.track.unmute()
 
         logger.info("[HANDOFF] Agent deaf=%s mute=%s", deaf, mute)
 
