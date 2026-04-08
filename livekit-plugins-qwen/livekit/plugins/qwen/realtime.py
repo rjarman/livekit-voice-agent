@@ -54,12 +54,18 @@ def _fix_dashscope_event(event: dict[str, Any]) -> None:
 
     DashScope expects "pcm" audio format, Azure sends "pcm16".
     """
-    if event.get("type") == "session.update":
+    event_type = event.get("type", "")
+    if event_type == "session.update":
         session = event.get("session", {})
         if session.get("input_audio_format") == "pcm16":
             session["input_audio_format"] = "pcm"
         if session.get("output_audio_format") == "pcm16":
             session["output_audio_format"] = "pcm"
+        logger.warning("[QWEN] Fixed session.update: audio_format=%s, voice=%s, modalities=%s",
+                      session.get("input_audio_format"), session.get("voice"), session.get("modalities"))
+    elif event_type != "input_audio_buffer.append":
+        # Log all non-audio events for debugging
+        logger.warning("[QWEN] Outgoing event: %s", event_type)
 
 
 class QwenRealtimeSession(OpenAIRealtimeSession):
@@ -69,6 +75,17 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
         super().__init__(realtime_model)
         # Listen to outgoing events and fix format before they're sent
         self.on("openai_client_event_queued", _fix_dashscope_event)
+        # Log incoming events for debugging
+        self.on("openai_server_event_received", self._log_server_event)
+
+    @staticmethod
+    def _log_server_event(event: dict) -> None:
+        event_type = event.get("type", "unknown")
+        if event_type not in ("input_audio_buffer.speech_started", "input_audio_buffer.speech_stopped"):
+            if "audio" in event_type and "delta" in event_type:
+                logger.debug("[QWEN] <<< %s (audio data)", event_type)
+            else:
+                logger.warning("[QWEN] <<< %s", event_type)
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
         """Use Bearer auth (not Azure's api-key header)."""
