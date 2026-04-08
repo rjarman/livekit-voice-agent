@@ -78,9 +78,7 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
         """Fix incoming events for DashScope compatibility."""
         event_type = event.get("type", "")
 
-        # DashScope doesn't echo metadata from response.create.
-        # The OpenAI plugin needs client_event_id in response.created
-        # to resolve generate_reply futures. We inject it.
+        # Fix 1: DashScope doesn't echo metadata from response.create.
         if event_type == "response.created" and self._last_response_create_event_id:
             response = event.get("response", {})
             if not isinstance(response.get("metadata"), dict):
@@ -89,6 +87,26 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                 response["metadata"]["client_event_id"] = self._last_response_create_event_id
                 logger.info("[QWEN] Injected client_event_id into response.created")
             self._last_response_create_event_id = None
+
+        # Fix 2: DashScope's output_item.added may have different item structure.
+        # Ensure item has 'object' field that OpenAI expects.
+        elif event_type == "response.output_item.added":
+            item = event.get("item", {})
+            if "object" not in item:
+                item["object"] = "realtime.item"
+
+        # Fix 3: DashScope's content_part.added may differ.
+        elif event_type == "response.content_part.added":
+            part = event.get("part", {})
+            # DashScope uses "audio" type, OpenAI expects it too but let's ensure
+            if "type" not in part and "audio" in str(event):
+                part["type"] = "audio"
+
+        # Fix 4: response.output_item.done — ensure item structure matches
+        elif event_type == "response.output_item.done":
+            item = event.get("item", {})
+            if "object" not in item:
+                item["object"] = "realtime.item"
 
     async def _create_ws_conn(self) -> aiohttp.ClientWebSocketResponse:
         """Use Bearer auth (not Azure's api-key header)."""
