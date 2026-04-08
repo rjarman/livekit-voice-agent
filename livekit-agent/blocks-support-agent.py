@@ -2,21 +2,25 @@
 Blocks Cloud Support Voice Agent for LiveKit.
 
 RAG-enabled voice agent that answers questions about Blocks Cloud documentation.
-Uses OpenAI RealtimeModel for low-latency voice + Qdrant for vector search.
-Supports human handoff via SIP call — agent goes silent during human conversation,
-resumes when the human support agent hangs up.
+Uses Qwen-Omni-Realtime (DashScope Singapore) for low-latency voice + Qdrant for vector search.
+Falls back to OpenAI Realtime if DASHSCOPE_API_KEY is not set.
+Supports human handoff via SIP call — agent goes deaf+mute during human conversation,
+records and transcribes in real-time, resumes with full context when human hangs up.
 """
 
 import asyncio
+import io
 import logging
 import os
 import re
+import struct
 import time
+import wave
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from livekit import api as lkapi
+from livekit import api as lkapi, rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -29,6 +33,7 @@ from livekit.agents import (
     function_tool,
 )
 from livekit.plugins import openai, silero
+from livekit.plugins.qwen import RealtimeModel as QwenRealtimeModel
 
 load_dotenv()
 
@@ -53,6 +58,11 @@ LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 
 HUMAN_SUPPORT_IDENTITY_PREFIX = "support-human-"
+# Transcribe audio in chunks of this many seconds during handoff
+TRANSCRIBE_CHUNK_SECONDS = 10
+SAMPLE_RATE = 48000
+NUM_CHANNELS = 1
+
 
 # ---------------------------------------------------------------------------
 # Chunking: split markdown by ## headings
@@ -123,7 +133,7 @@ def _load_all_chunks(docs_dir: str) -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
-# Qdrant indexing: embed + store on startup (skip if collection exists)
+# Qdrant indexing
 # ---------------------------------------------------------------------------
 
 async def _ensure_qdrant_indexed() -> None:
@@ -215,6 +225,42 @@ async def _search_qdrant(query: str, top_k: int = TOP_K) -> list[dict[str, Any]]
         }
         for hit in results.points
     ]
+
+
+# ---------------------------------------------------------------------------
+# Audio recording + transcription helpers
+# ---------------------------------------------------------------------------
+
+def _audio_frames_to_wav_bytes(frames: list[bytes], sample_rate: int, num_channels: int) -> bytes:
+    """Convert raw PCM int16 frames to WAV bytes for Whisper."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(num_channels)
+        wf.setsampwidth(2)  # int16 = 2 bytes
+        wf.setframerate(sample_rate)
+        for frame in frames:
+            wf.writeframes(frame)
+    return buf.getvalue()
+
+
+async def _transcribe_audio(audio_bytes: bytes) -> str:
+    """Transcribe WAV audio using OpenAI Whisper."""
+    import openai as oai
+
+    oai_client = oai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = "handoff_audio.wav"
+
+    try:
+        transcript = oai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language=None,  # auto-detect Bengali/English
+        )
+        return transcript.text
+    except Exception as e:
+        logger.error("[HANDOFF] Whisper transcription failed: %s", e)
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +396,6 @@ You: "Apnar aar kono proshno ache ki?"
         - The customer explicitly asks to speak with a human or real person.
         - You cannot find relevant documentation to answer their question.
         - The customer is frustrated or needs specialized help.
-        The human support agent will join the same call. You will go silent during their conversation
-        and resume when the human hangs up.
         Args:
             issue_summary: A brief 1-sentence summary of what the customer needs help with.
         """
@@ -376,13 +420,40 @@ You: "Apnar aar kono proshno ache ki?"
 
         return (
             "Tell the customer that you are connecting them with a human support agent now. "
-            "Ask them to please wait a moment. "
-            "After saying this, DO NOT speak again until told to resume. Stay completely silent."
+            "Ask them to please wait a moment."
         )
 
+    def _set_agent_deaf_mute(self, deaf: bool, mute: bool) -> None:
+        """Control the agent's audio input (deaf) and output (mute).
+
+        deaf=True:  unsubscribe from all remote audio tracks (agent can't hear)
+        mute=True:  mute all published audio tracks (agent can't speak)
+        """
+        # Deaf: unsubscribe from remote participants' audio tracks
+        for participant in self._room.remote_participants.values():
+            for pub in participant.track_publications.values():
+                if pub.kind == rtc.TrackKind.KIND_AUDIO:
+                    if isinstance(pub, rtc.RemoteTrackPublication):
+                        pub.set_subscribed(not deaf)
+
+        # Mute: mute local audio tracks
+        local = self._room.local_participant
+        for pub in local.track_publications.values():
+            if pub.kind == rtc.TrackKind.KIND_AUDIO:
+                if hasattr(pub, 'mute') and callable(pub.mute):
+                    if mute:
+                        pub.mute()
+                    else:
+                        pub.unmute()
+
+        logger.info("[HANDOFF] Agent deaf=%s mute=%s", deaf, mute)
+
     async def _connect_human_support(self, context: RunContext, summary: str) -> None:
-        """Place SIP call to the human support number and manage the handoff lifecycle."""
+        """Place SIP call to human support, manage handoff lifecycle with recording."""
         room_name = self._room.name
+        transcript_chunks: list[str] = []
+        audio_buffer: list[bytes] = []
+        recording = False
 
         try:
             lk_url = LIVEKIT_URL.replace("ws://", "http://").replace("wss://", "https://")
@@ -411,7 +482,7 @@ You: "Apnar aar kono proshno ache ki?"
 
                 logger.info("[HANDOFF] SIP call placed, waiting for human to pick up...")
 
-                # Events for tracking the human support participant
+                # --- Track human join/leave ---
                 human_joined = asyncio.Event()
                 human_left = asyncio.Event()
 
@@ -428,7 +499,7 @@ You: "Apnar aar kono proshno ache ki?"
                 self._room.on("participant_connected", _on_participant_connected)
                 self._room.on("participant_disconnected", _on_participant_disconnected)
 
-                # Check if human already joined (race condition — they may have connected before we registered the listener)
+                # Race condition check
                 already_in = any(
                     p.identity.startswith(HUMAN_SUPPORT_IDENTITY_PREFIX)
                     for p in self._room.remote_participants.values()
@@ -441,9 +512,10 @@ You: "Apnar aar kono proshno ache ki?"
                     await asyncio.wait_for(human_joined.wait(), timeout=60)
                 except asyncio.TimeoutError:
                     logger.warning("[HANDOFF] Human agent never picked up (60s timeout)")
+                    self._handoff_active = False
                     return
 
-                # Human picked up — brief them with the summary
+                # --- Human picked up: brief them, then go deaf+mute ---
                 logger.info("[HANDOFF] Human picked up, briefing them...")
                 session = context.session
                 await session.generate_reply(
@@ -453,31 +525,124 @@ You: "Apnar aar kono proshno ache ki?"
                         f"Nothing else. Just that one sentence."
                     )
                 )
+                # Give time for TTS to finish speaking the summary
+                await asyncio.sleep(2)
 
-                logger.info("[HANDOFF] Agent briefed human, now going silent. Waiting for human to leave...")
+                # Go deaf and mute
+                logger.info("[HANDOFF] Agent going deaf+mute, starting recording")
+                self._set_agent_deaf_mute(deaf=True, mute=True)
 
-                # Wait for human to hang up
+                # --- Record audio from all remote participants ---
+                recording = True
+
+                def _on_audio_frame(frame: rtc.AudioFrame) -> None:
+                    if recording and not human_left.is_set():
+                        audio_buffer.append(frame.data.tobytes())
+
+                # Subscribe to audio from all remote participants for recording
+                for participant in self._room.remote_participants.values():
+                    for pub in participant.track_publications.values():
+                        if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track:
+                            audio_stream = rtc.AudioStream(pub.track)
+                            asyncio.create_task(
+                                self._audio_stream_reader(audio_stream, audio_buffer, human_left)
+                            )
+
+                # Also capture audio from newly subscribed tracks
+                def _on_track_subscribed(track: Any, publication: Any, participant: Any) -> None:
+                    if publication.kind == rtc.TrackKind.KIND_AUDIO and not human_left.is_set():
+                        audio_stream = rtc.AudioStream(track)
+                        asyncio.create_task(
+                            self._audio_stream_reader(audio_stream, audio_buffer, human_left)
+                        )
+
+                self._room.on("track_subscribed", _on_track_subscribed)
+
+                # --- Transcribe in chunks while human talks ---
+                async def _chunked_transcriber() -> None:
+                    chunk_frames = SAMPLE_RATE * TRANSCRIBE_CHUNK_SECONDS
+                    while not human_left.is_set():
+                        await asyncio.sleep(TRANSCRIBE_CHUNK_SECONDS)
+                        if audio_buffer and not human_left.is_set():
+                            # Take current buffer, clear it
+                            frames_to_transcribe = list(audio_buffer)
+                            audio_buffer.clear()
+                            if frames_to_transcribe:
+                                wav_bytes = _audio_frames_to_wav_bytes(
+                                    frames_to_transcribe, SAMPLE_RATE, NUM_CHANNELS
+                                )
+                                text = await _transcribe_audio(wav_bytes)
+                                if text.strip():
+                                    transcript_chunks.append(text.strip())
+                                    logger.info("[HANDOFF] Transcribed chunk: %s", text[:80])
+
+                transcriber_task = asyncio.create_task(_chunked_transcriber())
+
+                # --- Wait for human to hang up ---
+                logger.info("[HANDOFF] Recording human-to-human conversation...")
                 await human_left.wait()
 
-        except Exception as e:
-            logger.error("[HANDOFF] Failed to connect human support: %s", e)
+                # Stop recording and transcribe remaining buffer
+                recording = False
+                transcriber_task.cancel()
+                try:
+                    await transcriber_task
+                except asyncio.CancelledError:
+                    pass
 
-        # Human left or failed — resume the AI agent
+                # Transcribe any remaining audio
+                if audio_buffer:
+                    wav_bytes = _audio_frames_to_wav_bytes(audio_buffer, SAMPLE_RATE, NUM_CHANNELS)
+                    text = await _transcribe_audio(wav_bytes)
+                    if text.strip():
+                        transcript_chunks.append(text.strip())
+                    audio_buffer.clear()
+
+        except Exception as e:
+            logger.error("[HANDOFF] Failed during handoff: %s", e)
+
+        # --- Resume agent ---
+        logger.info("[HANDOFF] Human left. Restoring agent audio...")
+        self._set_agent_deaf_mute(deaf=False, mute=False)
         self._handoff_active = False
-        logger.info("[HANDOFF] Resuming AI agent")
+
+        full_transcript = " ".join(transcript_chunks)
+        logger.info("[HANDOFF] Full transcript (%d chars): %s", len(full_transcript), full_transcript[:200])
 
         try:
             session = context.session
-            await session.generate_reply(
-                instructions=(
-                    "The human support agent has left the call. "
-                    "You can speak again now. "
-                    "Ask the customer: 'Is there anything else I can help you with?' "
-                    "in their preferred language. Be warm and friendly."
+            if full_transcript:
+                await session.generate_reply(
+                    instructions=(
+                        "The human support agent has left the call. You can speak again now. "
+                        f"Here is what the human agent discussed with the customer: '{full_transcript}'. "
+                        "Based on this conversation, ask the customer warmly in their preferred language "
+                        "if there is anything else you can help them with."
+                    )
                 )
-            )
+            else:
+                await session.generate_reply(
+                    instructions=(
+                        "The human support agent has left the call. You can speak again now. "
+                        "Ask the customer warmly in their preferred language: "
+                        "'Is there anything else I can help you with?'"
+                    )
+                )
         except Exception as e:
             logger.error("[HANDOFF] Failed to resume agent: %s", e)
+
+    async def _audio_stream_reader(
+        self, stream: rtc.AudioStream, buffer: list[bytes], stop_event: asyncio.Event
+    ) -> None:
+        """Read audio frames from a stream into the buffer until stop_event is set."""
+        try:
+            async for event in stream:
+                if stop_event.is_set():
+                    break
+                if hasattr(event, 'frame') and event.frame:
+                    buffer.append(event.frame.data.tobytes())
+        except Exception as e:
+            logger.debug("[HANDOFF] Audio stream ended: %s", e)
 
     @function_tool()
     async def end_call(
@@ -512,7 +677,6 @@ async def entrypoint(ctx: JobContext) -> None:
     t_start = time.monotonic()
     logger.info("[TIMING] entrypoint START — room: %s", room_name)
 
-    # Index docs into Qdrant (skips if already done)
     await _ensure_qdrant_indexed()
     logger.info("[TIMING] Qdrant indexing check — %.2fs", time.monotonic() - t_start)
 
@@ -522,12 +686,22 @@ async def entrypoint(ctx: JobContext) -> None:
     disconnect_event = asyncio.Event()
 
     t_model = time.monotonic()
-    realtime_model = openai.realtime.RealtimeModel(
-        model="gpt-realtime-1.5",
-        voice="marin",
-        temperature=0.7,
-    )
-    logger.info("[TIMING] RealtimeModel created — %.2fs", time.monotonic() - t_model)
+    # Use Qwen-Omni-Realtime via DashScope (Singapore) for lowest latency from BD
+    # Falls back to OpenAI if DASHSCOPE_API_KEY is not set
+    if os.environ.get("DASHSCOPE_API_KEY"):
+        realtime_model = QwenRealtimeModel(
+            model="qwen-omni-turbo-realtime",
+            voice="Cherry",
+            temperature=0.7,
+        )
+        logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
+    else:
+        realtime_model = openai.realtime.RealtimeModel(
+            model="gpt-realtime-1.5",
+            voice="marin",
+            temperature=0.7,
+        )
+        logger.info("[TIMING] OpenAI RealtimeModel created (fallback) — %.2fs", time.monotonic() - t_model)
 
     session = AgentSession(
         llm=realtime_model,

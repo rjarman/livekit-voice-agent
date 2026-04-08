@@ -13,14 +13,18 @@ RUN apt-get update && apt-get install -y \
 ENV PATH="/root/.local/bin:$PATH"
 
 # Copy project files
-COPY pyproject.toml .
-COPY voice-agent.py .
-COPY apple-seller-agent.py .
-COPY apple-seller-agent-bn.py .
-COPY blocks-support-agent.py .
+COPY livekit-agent/pyproject.toml .
+COPY livekit-agent/voice-agent.py .
+COPY livekit-agent/apple-seller-agent.py .
+COPY livekit-agent/apple-seller-agent-bn.py .
+COPY livekit-agent/blocks-support-agent.py .
 
 # Install dependencies with uv
 RUN uv sync --no-dev
+
+# Install Qwen realtime plugin
+COPY livekit-plugins-qwen/ /tmp/livekit-plugins-qwen/
+RUN uv pip install /tmp/livekit-plugins-qwen/ && rm -rf /tmp/livekit-plugins-qwen/
 
 # Download Silero VAD model during build
 RUN uv run python -c "from livekit.plugins import silero; silero.VAD.load()"

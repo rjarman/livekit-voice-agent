@@ -89,8 +89,8 @@ services:
 
   livekit-agent:
     build:
-      context: ./livekit-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: livekit-agent/Dockerfile
     image: livekit-agent:latest
     container_name: livekit-agent
     restart: unless-stopped
@@ -109,8 +109,8 @@ services:
 
   livekit-apple-seller-agent:
     build:
-      context: ./livekit-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: livekit-agent/Dockerfile
     image: livekit-agent:latest
     container_name: livekit-apple-seller-agent
     restart: unless-stopped
@@ -138,8 +138,8 @@ services:
 
   livekit-apple-seller-agent-bn:
     build:
-      context: ./livekit-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: livekit-agent/Dockerfile
     image: livekit-agent:latest
     container_name: livekit-apple-seller-agent-bn
     restart: unless-stopped
@@ -175,8 +175,8 @@ services:
 
   livekit-blocks-support-agent:
     build:
-      context: ./livekit-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: livekit-agent/Dockerfile
     image: livekit-agent:latest
     container_name: livekit-blocks-support-agent
     restart: unless-stopped
@@ -206,6 +206,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
       DOCS_DIR: /app/docs/cloud
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       SUPPORT_PHONE_NUMBER: ${SUPPORT_PHONE_NUMBER:-}
       SUPPORT_SIP_TRUNK_ID: ${SUPPORT_SIP_TRUNK_ID:-}
     depends_on:

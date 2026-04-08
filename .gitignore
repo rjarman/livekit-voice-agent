@@ -4,3 +4,6 @@ node_modules
 *.pem
 .idea
 google-credentials.json
+build/
+*.egg-info/
+__pycache__/
