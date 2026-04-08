@@ -552,30 +552,32 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
                     self._set_agent_deaf_mute(deaf=False, mute=False)
                     return
 
-                # --- Human picked up: unmute briefly to deliver summary ---
-                logger.info("[HANDOFF] Human picked up, delivering summary (lang=%s)", self._language)
+                # --- Human picked up: unmute and deliver summary ---
+                logger.info("[HANDOFF] Human answered, preparing to deliver summary (lang=%s)", self._language)
+
+                # Unmute and wait for audio channel to stabilize
                 self._set_agent_deaf_mute(deaf=False, mute=False)
+                await asyncio.sleep(2)
+
                 session = context.session
                 try:
                     if self._language == "bn":
-                        await session.generate_reply(
+                        speech = await session.generate_reply(
                             instructions=f"Say exactly this and nothing else: 'Customer er somossa holo: {summary}.'",
                         )
                     else:
-                        await session.generate_reply(
+                        speech = await session.generate_reply(
                             instructions=f"Say exactly this and nothing else: 'The customer needs help with: {summary}.'",
                         )
-                    # Wait for speech to finish
-                    await asyncio.sleep(4)
+                    # Wait for speech to finish playing (not just generating)
+                    if speech:
+                        await speech.join()
                     logger.info("[HANDOFF] Summary delivered to human agent")
                 except Exception as e:
                     logger.error("[HANDOFF] Failed to deliver summary: %s", e)
 
-                # Interrupt any leftover speech, then go deaf+mute
-                try:
-                    await session.interrupt()
-                except Exception:
-                    pass
+                # Wait a beat, then go deaf+mute for the handoff
+                await asyncio.sleep(1)
                 logger.info("[HANDOFF] Agent going deaf+mute during handoff")
                 self._set_agent_deaf_mute(deaf=True, mute=True)
 
@@ -598,19 +600,21 @@ You: "Jee, ami apnake ekjon support agent er shathe connect korchhi. Ektu opekkh
             session = context.session
             logger.info("[HANDOFF] Resuming with generate_reply (lang=%s)", self._language)
             if self._language == "bn":
-                await session.generate_reply(
+                speech = await session.generate_reply(
                     instructions=(
                         "Say exactly this and nothing else: "
                         "'Human support agent call chere diyechen. Apnar aar kono proshno thakle amake bolun.'"
                     ),
                 )
             else:
-                await session.generate_reply(
+                speech = await session.generate_reply(
                     instructions=(
                         "Say exactly this and nothing else: "
                         "'The human support agent has disconnected. Let me know if you have any other questions.'"
                     ),
                 )
+            if speech:
+                await speech.join()
             logger.info("[HANDOFF] Resume message delivered")
         except Exception as e:
             logger.error("[HANDOFF] Failed to resume agent: %s", e)
