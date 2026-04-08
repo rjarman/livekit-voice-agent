@@ -52,11 +52,9 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
         if event_type == "session.update":
             session = event.get("session", {})
             # Fix audio format
-            # Keep pcm16 — DashScope Realtime API accepts it despite docs saying "pcm"
-            # The regular API uses "pcm" but the Realtime model may need "pcm16"
-            # to actually generate audio output.
-            session.setdefault("input_audio_format", "pcm16")
-            session.setdefault("output_audio_format", "pcm16")
+            # DashScope expects pcm format
+            session["input_audio_format"] = "pcm"
+            session["output_audio_format"] = "pcm"
 
             # DashScope only supports these fields in session.update:
             #   modalities, voice, instructions, input_audio_format,
@@ -66,8 +64,8 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             # cause DashScope to silently fall back to text-only output.
             ALLOWED_FIELDS = {
                 "modalities", "voice", "instructions", "input_audio_format",
-                "output_audio_format", "turn_detection", "tools", "tool_choice",
-                "enable_search", "search_options",
+                "output_audio_format", "turn_detection", "tools",
+                "enable_search", "search_options", "temperature",
             }
             keys_to_remove = [
                 k for k in session
@@ -79,6 +77,16 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
             # Ensure audio modalities are always set when voice/modalities present
             if "modalities" in session or "voice" in session:
                 session.setdefault("modalities", ["text", "audio"])
+
+            # Force DashScope-compatible turn_detection format
+            td = session.get("turn_detection")
+            if td is not None and isinstance(td, dict):
+                # Ensure DashScope format
+                session["turn_detection"] = {
+                    "type": "server_vad",
+                    "threshold": td.get("threshold", 0.5),
+                    "silence_duration_ms": td.get("silence_duration_ms", 800),
+                }
 
             logger.warning("[QWEN] >>> session.update fields=%s",
                           list(session.keys()))
@@ -100,13 +108,29 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                           event.get("event_id"))
 
         elif event_type == "input_audio_buffer.append":
-            audio = event.get("audio", "")
+            # Resample 24kHz → 16kHz for DashScope (expects 16kHz input)
+            import base64
+            import struct
+            audio_b64 = event.get("audio", "")
+            if audio_b64:
+                raw = base64.b64decode(audio_b64)
+                # Simple 3:2 downsampling (24kHz → 16kHz)
+                samples = struct.unpack(f"<{len(raw)//2}h", raw)
+                # Take every 2 out of 3 samples (linear interpolation approximation)
+                resampled = []
+                for i in range(0, len(samples) - 2, 3):
+                    resampled.append(samples[i])
+                    # Interpolate between samples[i+1] and samples[i+2]
+                    resampled.append((samples[i+1] + samples[i+2]) // 2)
+                resampled_bytes = struct.pack(f"<{len(resampled)}h", *resampled)
+                event["audio"] = base64.b64encode(resampled_bytes).decode()
+
             if not hasattr(self, '_audio_send_count'):
                 self._audio_send_count = 0
             self._audio_send_count += 1
             if self._audio_send_count <= 3 or self._audio_send_count % 50 == 0:
-                logger.warning("[QWEN] >>> input_audio_buffer.append #%d size=%d",
-                              self._audio_send_count, len(audio))
+                logger.warning("[QWEN] >>> input_audio_buffer.append #%d size=%d (resampled 24k→16k)",
+                              self._audio_send_count, len(event.get("audio", "")))
         else:
             logger.warning("[QWEN] >>> %s", event_type)
 
