@@ -100,7 +100,13 @@ class QwenRealtimeSession(OpenAIRealtimeSession):
                           event.get("event_id"))
 
         elif event_type == "input_audio_buffer.append":
-            pass  # Don't log audio data
+            audio = event.get("audio", "")
+            if not hasattr(self, '_audio_send_count'):
+                self._audio_send_count = 0
+            self._audio_send_count += 1
+            if self._audio_send_count <= 3 or self._audio_send_count % 50 == 0:
+                logger.warning("[QWEN] >>> input_audio_buffer.append #%d size=%d",
+                              self._audio_send_count, len(audio))
         else:
             logger.warning("[QWEN] >>> %s", event_type)
 

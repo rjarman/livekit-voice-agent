@@ -700,9 +700,10 @@ async def entrypoint(ctx: JobContext) -> None:
         )
         logger.info("[TIMING] Qwen RealtimeModel created — %.2fs", time.monotonic() - t_model)
 
-        # No Silero VAD — let DashScope's server_vad handle turn detection
+        # Silero VAD needed — LiveKit uses it to push audio frames to the model
         session = AgentSession(
             llm=realtime_model,
+            vad=ctx.proc.userdata["vad"],
         )
 
         t_session = time.monotonic()
