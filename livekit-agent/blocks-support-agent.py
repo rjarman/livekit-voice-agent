@@ -683,16 +683,72 @@ async def entrypoint(ctx: JobContext) -> None:
 
     t_model = time.monotonic()
 
-    voice_provider = os.getenv("VOICE_PROVIDER", "openai")  # "openai" or "qwen"
+    # Voice provider: "openai" (realtime), "local" (pipeline), "qwen" (realtime)
+    voice_provider = os.getenv("VOICE_PROVIDER", "openai")
 
-    if voice_provider == "qwen" and os.environ.get("DASHSCOPE_API_KEY"):
+    if voice_provider == "local":
+        # --- Local pipeline: STT + LLM + TTS via custom_models server ---
+        # Runs on your Mac (M1 Max), accessed via SSH tunnel or VPN.
+        # Bengali STT (Whisper), LLM (Qwen3-8B with function calling), TTS (MMS Bengali)
+        local_base_url = os.getenv("LOCAL_MODEL_BASE_URL", "http://localhost:8000/v1")
+        local_api_key = os.getenv("LOCAL_MODEL_API_KEY", "sk-local-bengali-2026")
+
+        local_stt = openai.STT(
+            model="whisper-bengali",
+            language="bn",
+            base_url=local_base_url,
+            api_key=local_api_key,
+        )
+        local_llm = openai.LLM(
+            model="qwen3-8b",
+            base_url=local_base_url,
+            api_key=local_api_key,
+        )
+        local_tts = openai.TTS(
+            model="mms-tts-ben",
+            voice="default",
+            base_url=local_base_url,
+            api_key=local_api_key,
+        )
+        logger.info("[TIMING] Local pipeline models configured (base_url=%s) — %.2fs",
+                    local_base_url, time.monotonic() - t_model)
+
+        session = AgentSession(
+            stt=local_stt,
+            llm=local_llm,
+            tts=local_tts,
+            vad=ctx.proc.userdata["vad"],
+        )
+
+        t_session = time.monotonic()
+        await session.start(
+            agent=BlocksSupportAgent(
+                disconnect_event=disconnect_event,
+                room=ctx.room,
+            ),
+            room=ctx.room,
+        )
+        logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
+
+        t_greet = time.monotonic()
+        await session.generate_reply(
+            instructions=(
+                "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
+                "Say exactly this greeting in Bengali first: "
+                "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
+                "Apni ki Banglay shahajjo chan naki English e?' "
+                "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
+                "Would you prefer Bengali or English?'"
+            )
+        )
+        logger.info(
+            "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
+            time.monotonic() - t_greet, time.monotonic() - t_start,
+        )
+
+    elif voice_provider == "qwen" and os.environ.get("DASHSCOPE_API_KEY"):
         # --- Qwen-Omni-Realtime via DashScope (Singapore) ---
-        # NOTE: Qwen realtime does NOT support function calling.
-        # RAG (search_docs), handoff, and end_call will not work.
-        # Use only when Qwen gets function calling or for voice-only mode.
-        #
-        # Bengali STT requires qwen3.5-omni (needs API activation).
-        # qwen3-omni-flash-realtime works but only 19 languages (no Bengali).
+        # NOTE: No function calling support.
         qwen_model = os.getenv("QWEN_MODEL", "qwen3-omni-flash-realtime")
         qwen_voice = os.getenv("QWEN_VOICE", "Tina")
         realtime_model = QwenRealtimeModel(
