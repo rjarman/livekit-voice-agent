@@ -731,20 +731,25 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.info("[TIMING] session.start() — %.2fs", time.monotonic() - t_session)
 
         t_greet = time.monotonic()
-        await session.generate_reply(
-            instructions=(
-                "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
-                "Say exactly this greeting in Bengali first: "
-                "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
-                "Apni ki Banglay shahajjo chan naki English e?' "
-                "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
-                "Would you prefer Bengali or English?'"
+        try:
+            speech = await session.generate_reply(
+                instructions=(
+                    "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
+                    "Say exactly this greeting in Bengali first: "
+                    "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
+                    "Apni ki Banglay shahajjo chan naki English e?' "
+                    "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
+                    "Would you prefer Bengali or English?'"
+                )
             )
-        )
-        logger.info(
-            "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
-            time.monotonic() - t_greet, time.monotonic() - t_start,
-        )
+            if speech:
+                await speech.wait_for_playout()
+            logger.info(
+                "[TIMING] greeting generate_reply — %.2fs (total from start: %.2fs)",
+                time.monotonic() - t_greet, time.monotonic() - t_start,
+            )
+        except Exception as e:
+            logger.error("[TIMING] greeting FAILED: %s", e)
 
     elif voice_provider == "qwen" and os.environ.get("DASHSCOPE_API_KEY"):
         # --- Qwen-Omni-Realtime via DashScope (Singapore) ---
