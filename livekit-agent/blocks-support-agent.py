@@ -287,9 +287,12 @@ You MUST greet with "Assalamu Alaikum" ONLY ONCE at the very start of the conver
 NEVER say "Namaskar", "Nomoshkar", or "Namaste". \
 After the first greeting, NEVER repeat it. Just respond to the user's question directly.
 
-LANGUAGE AND ACCENT:
-The user speaks Bengali (Bangla) or English. You MUST speak in Bengali or English — NEVER in Chinese or any other language. \
-Your speech should sound natural, not Chinese-accented. The user is from Bangladesh.
+LANGUAGE AND SCRIPT:
+The user speaks Bengali (Bangla) or English. \
+CRITICAL: When speaking Bengali, you MUST write in Bengali script (বাংলা লিপি), NOT in romanized/transliterated form. \
+Example: Write "আসসালামু আলাইকুম" NOT "Assalamu Alaikum". \
+Write "আমি ব্লকস ক্লাউডের সাপোর্ট অ্যাসিস্ট্যান্ট" NOT "Ami Blocks Cloud er support assistant". \
+The user is from Bangladesh.
 
 LANGUAGE RULES:
 1. Your greeting is ALWAYS bilingual: Bengali first, then English.
@@ -735,11 +738,10 @@ async def entrypoint(ctx: JobContext) -> None:
         try:
             speech = await session.generate_reply(
                 instructions=(
-                    "IMPORTANT: You MUST start with 'Assalamu Alaikum' — NEVER say 'Namaskar' or 'Nomoshkar'. "
-                    "Say exactly this greeting in Bengali first: "
-                    "'Assalamu Alaikum! Ami Blocks Cloud er support assistant. "
-                    "Apni ki Banglay shahajjo chan naki English e?' "
-                    "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
+                    "Say this greeting in Bengali script: "
+                    "'আসসালামু আলাইকুম! আমি ব্লকস ক্লাউডের সাপোর্ট অ্যাসিস্ট্যান্ট। "
+                    "আপনি কি বাংলায় সাহায্য চান নাকি ইংরেজিতে?' "
+                    "Then say in English: 'Welcome! I am your Blocks Cloud support assistant. "
                     "Would you prefer Bengali or English?'"
                 ),
                 tool_choice="none",  # Disable tools for greeting
