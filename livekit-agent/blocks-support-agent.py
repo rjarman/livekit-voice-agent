@@ -741,7 +741,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     "Apni ki Banglay shahajjo chan naki English e?' "
                     "Then repeat in English: 'Welcome! I am your Blocks Cloud support assistant. "
                     "Would you prefer Bengali or English?'"
-                )
+                ),
+                tool_choice="none",  # Disable tools for greeting
             )
             if speech:
                 await speech.wait_for_playout()
