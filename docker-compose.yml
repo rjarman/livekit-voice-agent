@@ -209,6 +209,9 @@ services:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       QWEN_MODEL: ${QWEN_MODEL:-qwen3-omni-flash-realtime}
       QWEN_VOICE: ${QWEN_VOICE:-Tina}
+      VOICE_PROVIDER: ${VOICE_PROVIDER:-openai}
+      LOCAL_MODEL_BASE_URL: ${LOCAL_MODEL_BASE_URL:-http://localhost:8000/v1}
+      LOCAL_MODEL_API_KEY: ${LOCAL_MODEL_API_KEY:-sk-local-bengali-2026}
       SUPPORT_PHONE_NUMBER: ${SUPPORT_PHONE_NUMBER:-}
       SUPPORT_SIP_TRUNK_ID: ${SUPPORT_SIP_TRUNK_ID:-}
     depends_on:
