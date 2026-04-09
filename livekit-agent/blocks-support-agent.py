@@ -705,7 +705,7 @@ async def entrypoint(ctx: JobContext) -> None:
             api_key=local_api_key,
         )
         local_tts = openai.TTS(
-            model="mms-tts-ben",
+            model="tts-1",  # Must use "tts-1" so LiveKit plugin uses simple audio stream
             voice="default",
             base_url=local_base_url,
             api_key=local_api_key,
